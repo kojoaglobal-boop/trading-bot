@@ -11,6 +11,7 @@
     "optimize": "node src/cli.js optimize --sample",
     "walk-forward": "node src/cli.js walk-forward --sample",
     "sources": "node src/cli.js sources",
+    "journal": "node src/cli.js journal",
     "test": "node --test"
   },
   "engines": {

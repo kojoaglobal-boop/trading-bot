@@ -18,6 +18,7 @@ node src/cli.js backtest --sample
 node src/cli.js optimize --sample
 node src/cli.js walk-forward --sample
 node src/cli.js paper --ticks 200 --audit
+node src/cli.js journal
 node src/cli.js sources
 node --test
 ```
@@ -29,6 +30,7 @@ npm run backtest
 npm run optimize
 npm run walk-forward
 npm run paper
+npm run journal
 npm run sources
 npm test
 ```
@@ -68,6 +70,12 @@ For audit output:
 ```powershell
 node src/cli.js backtest --sample --audit
 node src/cli.js paper --ticks 200 --audit
+```
+
+Review saved audit logs:
+
+```powershell
+node src/cli.js journal
 ```
 
 ## Current Strategy

@@ -8,6 +8,7 @@ import { Portfolio } from "./core/portfolio.js";
 import { RiskEngine } from "./core/risk-engine.js";
 import { formatReport } from "./core/report.js";
 import { assertLiveTradingAllowed } from "./core/live-gateway.js";
+import { formatJournal, loadAuditJournal } from "./core/journal.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -80,6 +81,9 @@ try {
     printDoctor();
   } else if (command === "sources") {
     console.log(formatSourceStatuses(getSourceStatuses()));
+  } else if (command === "journal") {
+    const logs = await loadAuditJournal(args.logs || "logs");
+    console.log(formatJournal(logs, { limit: Number(args.limit || 12) }));
   } else {
     printHelp();
   }
@@ -160,6 +164,7 @@ Usage:
   node src/cli.js optimize --sample
   node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit
+  node src/cli.js journal
   node src/cli.js doctor
   node src/cli.js sources
 
@@ -169,6 +174,7 @@ Commands:
   walk-forward
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
+  journal    Show saved audit-log summaries
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 `);
