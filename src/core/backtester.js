@@ -1,3 +1,4 @@
+import { analyzeFills } from "./analytics.js";
 import { summarizeBarSources } from "./source-registry.js";
 
 export function runBacktest({ bars, broker, config, mode, portfolio, riskEngine, strategy }) {
@@ -66,6 +67,7 @@ export function runBacktest({ bars, broker, config, mode, portfolio, riskEngine,
   }
 
   const finalSnapshot = portfolio.snapshot(markPrices);
+  const tradeAnalytics = analyzeFills(fills);
 
   return {
     mode,
@@ -83,10 +85,17 @@ export function runBacktest({ bars, broker, config, mode, portfolio, riskEngine,
       decisions: decisions.length,
       fills: fills.length,
       rejections: rejections.length,
+      closedTrades: tradeAnalytics.summary.closedTrades,
+      winRate: tradeAnalytics.summary.winRate,
+      profitFactor: tradeAnalytics.summary.profitFactor,
+      grossProfit: tradeAnalytics.summary.grossProfit,
+      grossLoss: tradeAnalytics.summary.grossLoss,
+      averageTradePnl: tradeAnalytics.summary.averageTradePnl,
       maxDrawdownPct: calculateMaxDrawdown(equityCurve),
       exposure: finalSnapshot.exposure
     },
     fills,
+    closedTrades: tradeAnalytics.closedTrades,
     rejections,
     equityCurve
   };

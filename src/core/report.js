@@ -12,6 +12,9 @@ export function formatReport(report) {
   lines.push(`Bars processed:  ${metrics.bars}`);
   lines.push(`Decisions:       ${metrics.decisions}`);
   lines.push(`Fills:           ${metrics.fills}`);
+  lines.push(`Closed trades:   ${metrics.closedTrades}`);
+  lines.push(`Win rate:        ${pct(metrics.winRate)}`);
+  lines.push(`Profit factor:   ${formatProfitFactor(metrics.profitFactor)}`);
   lines.push(`Rejected trades: ${metrics.rejections}`);
 
   if (report.sources?.length) {
@@ -80,4 +83,9 @@ function formatNumber(value) {
   if (Math.abs(value) >= 100) return value.toFixed(2);
   if (Math.abs(value) >= 1) return value.toFixed(4);
   return value.toFixed(8);
+}
+
+function formatProfitFactor(value) {
+  if (value === Infinity) return "Infinity";
+  return Number(value).toFixed(2);
 }

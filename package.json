@@ -8,6 +8,8 @@
     "backtest": "node src/cli.js backtest --sample",
     "paper": "node src/cli.js paper --ticks 200",
     "doctor": "node src/cli.js doctor",
+    "optimize": "node src/cli.js optimize --sample",
+    "walk-forward": "node src/cli.js walk-forward --sample",
     "sources": "node src/cli.js sources",
     "test": "node --test"
   },

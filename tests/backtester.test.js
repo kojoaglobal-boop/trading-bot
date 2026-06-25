@@ -28,5 +28,7 @@ test("backtester processes sample bars and returns account metrics", () => {
   assert.equal(report.metrics.bars, 500);
   assert.equal(Number.isFinite(report.account.finalEquity), true);
   assert.equal(report.account.finalEquity > 0, true);
+  assert.equal(Number.isFinite(report.metrics.winRate), true);
+  assert.equal(Number.isFinite(report.metrics.averageTradePnl), true);
   assert.equal(Array.isArray(report.equityCurve), true);
 });

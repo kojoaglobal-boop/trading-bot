@@ -8,6 +8,12 @@ import { Portfolio } from "./core/portfolio.js";
 import { RiskEngine } from "./core/risk-engine.js";
 import { formatReport } from "./core/report.js";
 import { assertLiveTradingAllowed } from "./core/live-gateway.js";
+import {
+  formatSweepResult,
+  formatWalkForwardResult,
+  runParameterSweep,
+  runWalkForwardValidation
+} from "./core/optimizer.js";
 import { formatSourceStatuses, getSourceStatuses } from "./core/source-registry.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
@@ -27,6 +33,37 @@ try {
     const report = runSimulation(bars, "backtest");
     console.log(formatReport(report));
     await maybeWriteAudit(report, args);
+  } else if (command === "optimize") {
+    const bars = await loadBarsFromArgs(args, {
+      defaultBars: Number(args.bars || 260),
+      seed: Number(args.seed || 42)
+    });
+    const sweep = runParameterSweep({
+      bars,
+      createReport: (candidateBars, strategyOverrides) => runSimulation(
+        candidateBars,
+        "optimize",
+        strategyOverrides
+      ),
+      limit: Number(args.limit || 10)
+    });
+    console.log(formatSweepResult(sweep));
+  } else if (command === "walk-forward") {
+    const bars = await loadBarsFromArgs(args, {
+      defaultBars: Number(args.bars || 320),
+      seed: Number(args.seed || 42)
+    });
+    const result = runWalkForwardValidation({
+      bars,
+      createReport: (candidateBars, strategyOverrides) => runSimulation(
+        candidateBars,
+        "walk-forward",
+        strategyOverrides
+      ),
+      limit: Number(args.limit || 10),
+      trainPct: Number(args.trainPct || 0.65)
+    });
+    console.log(formatWalkForwardResult(result));
   } else if (command === "paper") {
     const ticks = Number(args.ticks || 200);
     const bars = createSampleBars({
@@ -51,14 +88,27 @@ try {
   process.exitCode = 1;
 }
 
-function runSimulation(bars, mode) {
+async function loadBarsFromArgs(args, { defaultBars, seed }) {
+  return args.csv
+    ? loadCsvBars(args.csv)
+    : createSampleBars({
+        symbols: defaultConfig.universe,
+        barsPerSymbol: defaultBars,
+        seed
+      });
+}
+
+function runSimulation(bars, mode, strategyOverrides = {}) {
   const portfolio = new Portfolio({
     startingCash: defaultConfig.account.startingCash
   });
 
   const riskEngine = new RiskEngine(defaultConfig.risk);
   const broker = new PaperBroker(defaultConfig.execution.paper);
-  const strategy = new MomentumBreakoutStrategy(defaultConfig.strategy.momentumBreakout);
+  const strategy = new MomentumBreakoutStrategy({
+    ...defaultConfig.strategy.momentumBreakout,
+    ...strategyOverrides
+  });
 
   return runBacktest({
     bars,
@@ -107,12 +157,17 @@ function printHelp() {
 Usage:
   node src/cli.js backtest --sample
   node src/cli.js backtest --csv ./data/bars.csv
+  node src/cli.js optimize --sample
+  node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit
   node src/cli.js doctor
   node src/cli.js sources
 
 Commands:
   backtest   Run the strategy over sample or CSV bar data
+  optimize   Sweep strategy settings and rank candidates
+  walk-forward
+             Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration

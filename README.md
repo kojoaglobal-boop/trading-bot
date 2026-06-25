@@ -15,6 +15,8 @@ From this folder:
 
 ```powershell
 node src/cli.js backtest --sample
+node src/cli.js optimize --sample
+node src/cli.js walk-forward --sample
 node src/cli.js paper --ticks 200 --audit
 node src/cli.js sources
 node --test
@@ -24,6 +26,8 @@ If `npm` works on your machine, these are equivalent:
 
 ```powershell
 npm run backtest
+npm run optimize
+npm run walk-forward
 npm run paper
 npm run sources
 npm test
@@ -38,6 +42,8 @@ npm test
 - `src/core/market-data.js` loads CSV bars or generates deterministic sample data.
 - `src/core/source-registry.js` reports exactly which data, broker, and AI sources are configured.
 - `src/core/audit-log.js` writes JSON run records when `--audit` is used.
+- `src/core/optimizer.js` runs parameter sweeps and walk-forward validation.
+- `src/core/analytics.js` calculates closed trades, win rate, and profit factor.
 - `src/strategies/momentum-breakout.js` contains the first strategy.
 - `src/core/live-gateway.js` blocks live trading unless explicit gates are added later.
 
@@ -74,6 +80,22 @@ The included starter strategy is a long-only momentum breakout system:
 - sell when trend rolls over
 
 This is not a prediction machine or a promise of profit. It is a testable baseline that gives us a working loop: data in, signal out, risk check, paper fill, portfolio update, report.
+
+## Strategy Research
+
+Run a parameter sweep:
+
+```powershell
+node src/cli.js optimize --sample
+```
+
+Run walk-forward validation:
+
+```powershell
+node src/cli.js walk-forward --sample
+```
+
+Walk-forward testing optimizes on the first section of data and then tests the best candidates on unseen later data. That is more honest than choosing settings from one full-period backtest.
 
 ## CSV Format
 
