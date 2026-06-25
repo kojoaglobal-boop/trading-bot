@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { defaultConfig } from "./config/default.js";
 import { writeAuditLog } from "./core/audit-log.js";
+import { loadDotEnv } from "./core/env-loader.js";
 import { runBacktest } from "./core/backtester.js";
 import { loadCsvBars, createSampleBars } from "./core/market-data.js";
 import { PaperBroker } from "./core/paper-broker.js";
@@ -20,6 +21,7 @@ import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
+const envLoad = await loadDotEnv(args.env || ".env");
 
 try {
   if (command === "backtest") {
@@ -78,7 +80,7 @@ try {
     console.log("\nMode: paper only. No real orders were placed.");
     await maybeWriteAudit(report, args);
   } else if (command === "doctor") {
-    printDoctor();
+    printDoctor(envLoad);
   } else if (command === "sources") {
     console.log(formatSourceStatuses(getSourceStatuses()));
   } else if (command === "journal") {
@@ -136,10 +138,11 @@ async function maybeWriteAudit(report, args) {
   console.log(`\nAudit log: ${filePath}`);
 }
 
-function printDoctor() {
+function printDoctor(envLoad) {
   console.log("Trading Bot Doctor");
   console.log("==================");
   console.log(`Node: ${process.version}`);
+  console.log(`.env: ${envLoad.loaded ? `loaded ${envLoad.keys.length} keys from ${envLoad.filePath}` : "not found"}`);
   console.log(`Universe: ${defaultConfig.universe.map((item) => item.symbol).join(", ")}`);
   console.log(`Starting cash: $${defaultConfig.account.startingCash.toLocaleString("en-US")}`);
   console.log(`Max trade risk: ${(defaultConfig.risk.maxRiskPerTradePct * 100).toFixed(2)}%`);
@@ -177,6 +180,9 @@ Commands:
   journal    Show saved audit-log summaries
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
+
+Options:
+  --env FILE  Load environment variables from FILE instead of .env
 `);
 }
 

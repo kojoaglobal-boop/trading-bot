@@ -65,6 +65,14 @@ Generated data and CSV imports are labeled in every report. Real integrations wi
 - what risk rule approved or blocked the trade?
 - where is the audit trail?
 
+To prepare local keys later:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Then fill in only the provider keys we decide to use. `.env` is ignored by Git.
+
 For audit output:
 
 ```powershell
