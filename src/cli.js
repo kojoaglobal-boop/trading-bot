@@ -17,6 +17,11 @@ import {
   runWalkForwardValidation
 } from "./core/optimizer.js";
 import { formatSourceStatuses, getSourceStatuses } from "./core/source-registry.js";
+import {
+  AlpacaClient,
+  formatAlpacaAccount,
+  formatLatestBars
+} from "./integrations/alpaca-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
 const args = parseArgs(process.argv.slice(2));
@@ -86,12 +91,44 @@ try {
   } else if (command === "journal") {
     const logs = await loadAuditJournal(args.logs || "logs");
     console.log(formatJournal(logs, { limit: Number(args.limit || 12) }));
+  } else if (command === "alpaca") {
+    await runAlpacaCommand(args);
   } else {
     printHelp();
   }
 } catch (error) {
   console.error(`\nError: ${error.message}`);
   process.exitCode = 1;
+}
+
+async function runAlpacaCommand(args) {
+  const subcommand = args._[1] || "help";
+  const client = new AlpacaClient();
+
+  if (subcommand === "account") {
+    const account = await client.getAccount();
+    console.log(formatAlpacaAccount(account));
+    return;
+  }
+
+  if (subcommand === "bars") {
+    const symbols = String(args.symbols || "TSLA,AAPL")
+      .split(",")
+      .map((symbol) => symbol.trim().toUpperCase())
+      .filter(Boolean);
+    const bars = await client.getLatestStockBars({
+      symbols,
+      feed: String(args.feed || "iex")
+    });
+    console.log(formatLatestBars(bars));
+    return;
+  }
+
+  console.log(`Alpaca Commands
+===============
+  node src/cli.js alpaca account
+  node src/cli.js alpaca bars --symbols TSLA,AAPL --feed iex
+`);
 }
 
 async function loadBarsFromArgs(args, { defaultBars, seed }) {
@@ -168,6 +205,8 @@ Usage:
   node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit
   node src/cli.js journal
+  node src/cli.js alpaca account
+  node src/cli.js alpaca bars --symbols TSLA,AAPL
   node src/cli.js doctor
   node src/cli.js sources
 
@@ -178,6 +217,7 @@ Commands:
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
   journal    Show saved audit-log summaries
+  alpaca     Check Alpaca paper account and stock market data
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 

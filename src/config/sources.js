@@ -26,7 +26,7 @@ export const sourceCatalog = [
     mode: "paper-or-live",
     covers: ["stock", "meme"],
     requiredEnv: ["ALPACA_API_KEY_ID", "ALPACA_API_SECRET_KEY"],
-    optionalEnv: ["ALPACA_BASE_URL"],
+    optionalEnv: ["ALPACA_BASE_URL", "ALPACA_DATA_BASE_URL"],
     cost: "free paper account; paid market-data upgrades may be useful",
     purpose: "Stocks, ETFs, crypto, paper trading, and later broker execution."
   },

@@ -12,6 +12,8 @@
     "walk-forward": "node src/cli.js walk-forward --sample",
     "sources": "node src/cli.js sources",
     "journal": "node src/cli.js journal",
+    "alpaca:account": "node src/cli.js alpaca account",
+    "alpaca:bars": "node src/cli.js alpaca bars --symbols TSLA,AAPL",
     "test": "node --test"
   },
   "engines": {

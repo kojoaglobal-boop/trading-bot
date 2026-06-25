@@ -20,6 +20,8 @@ node src/cli.js walk-forward --sample
 node src/cli.js paper --ticks 200 --audit
 node src/cli.js journal
 node src/cli.js sources
+node src/cli.js alpaca account
+node src/cli.js alpaca bars --symbols TSLA,AAPL
 node --test
 ```
 
@@ -32,6 +34,8 @@ npm run walk-forward
 npm run paper
 npm run journal
 npm run sources
+npm run alpaca:account
+npm run alpaca:bars
 npm test
 ```
 
@@ -72,6 +76,22 @@ Copy-Item .env.example .env
 ```
 
 Then fill in only the provider keys we decide to use. `.env` is ignored by Git.
+
+For Alpaca paper trading, fill these values:
+
+```text
+ALPACA_API_KEY_ID=
+ALPACA_API_SECRET_KEY=
+ALPACA_BASE_URL=https://paper-api.alpaca.markets
+ALPACA_DATA_BASE_URL=https://data.alpaca.markets
+```
+
+Then verify the connection:
+
+```powershell
+node src/cli.js alpaca account
+node src/cli.js alpaca bars --symbols TSLA,AAPL
+```
 
 For audit output:
 
