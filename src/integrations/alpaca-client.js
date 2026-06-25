@@ -41,7 +41,38 @@ export class AlpacaClient {
     return this.requestJson(url);
   }
 
-  async requestJson(input) {
+  async listOrders({ status = "open", limit = 20 } = {}) {
+    const url = new URL(`${this.paperBaseUrl}/v2/orders`);
+    url.searchParams.set("status", status);
+    url.searchParams.set("limit", String(limit));
+    return this.requestJson(url);
+  }
+
+  async getOrder(orderId) {
+    if (!orderId) {
+      throw new Error("Order ID is required.");
+    }
+    return this.requestJson(`${this.paperBaseUrl}/v2/orders/${orderId}`);
+  }
+
+  async submitOrder(order) {
+    validatePaperOrder(order);
+    return this.requestJson(`${this.paperBaseUrl}/v2/orders`, {
+      method: "POST",
+      body: order
+    });
+  }
+
+  async cancelOrder(orderId) {
+    if (!orderId) {
+      throw new Error("Order ID is required.");
+    }
+    return this.requestJson(`${this.paperBaseUrl}/v2/orders/${orderId}`, {
+      method: "DELETE"
+    });
+  }
+
+  async requestJson(input, { method = "GET", body } = {}) {
     if (!this.isConfigured()) {
       throw new Error(`Missing Alpaca keys: ${this.missingKeys().join(", ")}`);
     }
@@ -50,13 +81,21 @@ export class AlpacaClient {
       throw new Error("Fetch API is not available in this Node runtime.");
     }
 
-    const response = await this.fetchFn(input, {
+    const requestOptions = {
+      method,
       headers: {
         "APCA-API-KEY-ID": this.apiKey,
         "APCA-API-SECRET-KEY": this.secretKey,
-        Accept: "application/json"
+        Accept: "application/json",
+        "Content-Type": "application/json"
       }
-    });
+    };
+
+    if (body !== undefined) {
+      requestOptions.body = JSON.stringify(body);
+    }
+
+    const response = await this.fetchFn(input, requestOptions);
 
     const text = await response.text();
     const payload = text ? JSON.parse(text) : {};
@@ -68,6 +107,88 @@ export class AlpacaClient {
 
     return payload;
   }
+}
+
+export function createLimitCancelSmokeOrder({
+  symbol = "AAPL",
+  side = "buy",
+  qty = "1",
+  limitPrice = "1.00"
+} = {}) {
+  return {
+    symbol: normalizeSymbol(symbol),
+    qty: String(qty),
+    side: normalizeSide(side),
+    type: "limit",
+    time_in_force: "day",
+    limit_price: String(limitPrice),
+    client_order_id: `tb-smoke-${Date.now()}`
+  };
+}
+
+export function createTinyMarketOrder({
+  symbol = "AAPL",
+  side = "buy",
+  notional = "1.00"
+} = {}) {
+  return {
+    symbol: normalizeSymbol(symbol),
+    notional: String(notional),
+    side: normalizeSide(side),
+    type: "market",
+    time_in_force: "day",
+    client_order_id: `tb-market-${Date.now()}`
+  };
+}
+
+export function formatOrder(order) {
+  const lines = [];
+  lines.push("Alpaca Paper Order");
+  lines.push("==================");
+  lines.push(`ID:              ${order.id || "unknown"}`);
+  lines.push(`Client Order ID: ${order.client_order_id || "unknown"}`);
+  lines.push(`Symbol:          ${order.symbol || "unknown"}`);
+  lines.push(`Side:            ${order.side || "unknown"}`);
+  lines.push(`Type:            ${order.type || "unknown"}`);
+  lines.push(`Status:          ${order.status || "unknown"}`);
+  lines.push(`Qty:             ${order.qty || "n/a"}`);
+  lines.push(`Notional:        ${order.notional ? money(order.notional) : "n/a"}`);
+  lines.push(`Limit Price:     ${order.limit_price ? money(order.limit_price) : "n/a"}`);
+  lines.push(`Filled Qty:      ${order.filled_qty || "0"}`);
+  lines.push(`Filled Avg:      ${order.filled_avg_price ? money(order.filled_avg_price) : "n/a"}`);
+  return lines.join("\n");
+}
+
+export function formatOrders(orders) {
+  const lines = [];
+  lines.push("Alpaca Paper Orders");
+  lines.push("===================");
+
+  if (!orders.length) {
+    lines.push("No orders returned.");
+    return lines.join("\n");
+  }
+
+  for (const order of orders) {
+    lines.push(
+      `${String(order.symbol || "unknown").padEnd(6)} ${String(order.side || "?").padEnd(4)} ${String(order.type || "?").padEnd(6)} ${String(order.status || "?").padEnd(12)} id=${order.id || "unknown"}`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatSmokeOrderResult({ submitted, cancelStatus, afterCancel }) {
+  const lines = [];
+  lines.push("Alpaca Paper Smoke Order");
+  lines.push("========================");
+  lines.push(`Submitted: ${submitted.id || "unknown"} ${submitted.symbol} ${submitted.side} ${submitted.type}`);
+  lines.push(`Initial status: ${submitted.status || "unknown"}`);
+  lines.push(`Cancel status:  ${cancelStatus}`);
+  if (afterCancel) {
+    lines.push(`Final status:   ${afterCancel.status || "unknown"}`);
+  }
+  return lines.join("\n");
 }
 
 export function formatAlpacaAccount(account) {
@@ -108,6 +229,48 @@ export function formatLatestBars(payload) {
 
 function trimTrailingSlash(value) {
   return String(value).replace(/\/+$/, "");
+}
+
+function validatePaperOrder(order) {
+  if (!order || typeof order !== "object") {
+    throw new Error("Order payload is required.");
+  }
+
+  if (!order.symbol) {
+    throw new Error("Order symbol is required.");
+  }
+
+  if (!["buy", "sell"].includes(order.side)) {
+    throw new Error("Order side must be buy or sell.");
+  }
+
+  if (!["market", "limit"].includes(order.type)) {
+    throw new Error("Only market and limit paper orders are supported by this client.");
+  }
+
+  if (order.type === "market" && !order.notional && !order.qty) {
+    throw new Error("Market order requires notional or qty.");
+  }
+
+  if (order.type === "limit" && (!order.qty || !order.limit_price)) {
+    throw new Error("Limit order requires qty and limit_price.");
+  }
+
+  if (order.notional && Number(order.notional) > 5) {
+    throw new Error("Tiny paper market orders are capped at $5 notional.");
+  }
+}
+
+function normalizeSymbol(symbol) {
+  return String(symbol || "").trim().toUpperCase();
+}
+
+function normalizeSide(side) {
+  const normalized = String(side || "").trim().toLowerCase();
+  if (!["buy", "sell"].includes(normalized)) {
+    throw new Error("Side must be buy or sell.");
+  }
+  return normalized;
 }
 
 function money(value) {

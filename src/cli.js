@@ -19,8 +19,13 @@ import {
 import { formatSourceStatuses, getSourceStatuses } from "./core/source-registry.js";
 import {
   AlpacaClient,
+  createLimitCancelSmokeOrder,
+  createTinyMarketOrder,
   formatAlpacaAccount,
-  formatLatestBars
+  formatLatestBars,
+  formatOrder,
+  formatOrders,
+  formatSmokeOrderResult
 } from "./integrations/alpaca-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
@@ -124,11 +129,63 @@ async function runAlpacaCommand(args) {
     return;
   }
 
+  if (subcommand === "orders") {
+    const orders = await client.listOrders({
+      status: String(args.status || "open"),
+      limit: Number(args.limit || 20)
+    });
+    console.log(formatOrders(orders));
+    return;
+  }
+
+  if (subcommand === "smoke-order") {
+    assertPaperConfirmation(args);
+    const order = createLimitCancelSmokeOrder({
+      symbol: String(args.symbol || "AAPL"),
+      side: String(args.side || "buy"),
+      qty: String(args.qty || "1"),
+      limitPrice: String(args.limitPrice || args.limit_price || "1.00")
+    });
+    const submitted = await client.submitOrder(order);
+    let cancelStatus = "not attempted";
+    let afterCancel = null;
+    try {
+      await client.cancelOrder(submitted.id);
+      cancelStatus = "requested";
+      afterCancel = await client.getOrder(submitted.id);
+    } catch (error) {
+      cancelStatus = `failed: ${error.message}`;
+    }
+    console.log(formatSmokeOrderResult({ submitted, cancelStatus, afterCancel }));
+    return;
+  }
+
+  if (subcommand === "market-order") {
+    assertPaperConfirmation(args);
+    const order = createTinyMarketOrder({
+      symbol: String(args.symbol || "AAPL"),
+      side: String(args.side || "buy"),
+      notional: String(args.notional || "1.00")
+    });
+    const submitted = await client.submitOrder(order);
+    console.log(formatOrder(submitted));
+    return;
+  }
+
   console.log(`Alpaca Commands
 ===============
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL --feed iex
+  node src/cli.js alpaca orders
+  node src/cli.js alpaca smoke-order --confirm-paper
+  node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
 `);
+}
+
+function assertPaperConfirmation(args) {
+  if (!args["confirm-paper"]) {
+    throw new Error("Refusing to submit even a paper order without --confirm-paper.");
+  }
 }
 
 async function loadBarsFromArgs(args, { defaultBars, seed }) {
@@ -207,6 +264,7 @@ Usage:
   node src/cli.js journal
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
+  node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources
 
@@ -217,7 +275,7 @@ Commands:
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
   journal    Show saved audit-log summaries
-  alpaca     Check Alpaca paper account and stock market data
+  alpaca     Check Alpaca paper account, market data, and guarded paper orders
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 

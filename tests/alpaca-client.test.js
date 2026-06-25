@@ -2,8 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AlpacaClient,
+  createLimitCancelSmokeOrder,
+  createTinyMarketOrder,
   formatAlpacaAccount,
-  formatLatestBars
+  formatLatestBars,
+  formatOrder,
+  formatOrders,
+  formatSmokeOrderResult
 } from "../src/integrations/alpaca-client.js";
 
 test("AlpacaClient reports missing keys before making requests", async () => {
@@ -77,6 +82,72 @@ test("AlpacaClient fetches latest bars from data API", async () => {
   assert.match(capturedUrl, /feed=iex/);
 });
 
+test("AlpacaClient submits and cancels paper orders", async () => {
+  const calls = [];
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret",
+      ALPACA_BASE_URL: "https://paper.example.test"
+    },
+    fetchFn: async (url, options) => {
+      calls.push({ url: String(url), options });
+      if (options.method === "POST") {
+        return jsonResponse({
+          id: "order-1",
+          symbol: "AAPL",
+          side: "buy",
+          type: "limit",
+          status: "accepted"
+        });
+      }
+      if (options.method === "DELETE") {
+        return jsonResponse({}, 204);
+      }
+      return jsonResponse({
+        id: "order-1",
+        symbol: "AAPL",
+        side: "buy",
+        type: "limit",
+        status: "canceled"
+      });
+    }
+  });
+
+  const submitted = await client.submitOrder(createLimitCancelSmokeOrder());
+  await client.cancelOrder(submitted.id);
+  const afterCancel = await client.getOrder(submitted.id);
+
+  assert.equal(submitted.id, "order-1");
+  assert.equal(afterCancel.status, "canceled");
+  assert.equal(calls[0].url, "https://paper.example.test/v2/orders");
+  assert.equal(JSON.parse(calls[0].options.body).limit_price, "1.00");
+  assert.equal(calls[1].options.method, "DELETE");
+});
+
+test("tiny market order builder caps accidental large notional orders", async () => {
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret"
+    },
+    fetchFn: async () => jsonResponse({})
+  });
+
+  assert.deepEqual(createTinyMarketOrder({ symbol: "tsla", notional: "1" }), {
+    symbol: "TSLA",
+    notional: "1",
+    side: "buy",
+    type: "market",
+    time_in_force: "day",
+    client_order_id: createTinyMarketOrder({}).client_order_id
+  });
+  await assert.rejects(
+    () => client.submitOrder(createTinyMarketOrder({ notional: "6" })),
+    /capped at \$5/
+  );
+});
+
 test("Alpaca formatters do not reveal credentials", () => {
   assert.match(
     formatAlpacaAccount({
@@ -101,6 +172,45 @@ test("Alpaca formatters do not reveal credentials", () => {
       }
     }),
     /TSLA/
+  );
+  assert.match(
+    formatOrder({
+      id: "order-1",
+      symbol: "AAPL",
+      side: "buy",
+      type: "market",
+      status: "filled",
+      notional: "1"
+    }),
+    /AAPL/
+  );
+  assert.match(
+    formatOrders([
+      {
+        id: "order-1",
+        symbol: "AAPL",
+        side: "buy",
+        type: "limit",
+        status: "canceled"
+      }
+    ]),
+    /canceled/
+  );
+  assert.match(
+    formatSmokeOrderResult({
+      submitted: {
+        id: "order-1",
+        symbol: "AAPL",
+        side: "buy",
+        type: "limit",
+        status: "accepted"
+      },
+      cancelStatus: "requested",
+      afterCancel: {
+        status: "canceled"
+      }
+    }),
+    /Final status/
   );
 });
 

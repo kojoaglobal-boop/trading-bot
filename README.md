@@ -22,6 +22,7 @@ node src/cli.js journal
 node src/cli.js sources
 node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
+node src/cli.js alpaca smoke-order --confirm-paper
 node --test
 ```
 
@@ -36,6 +37,8 @@ npm run journal
 npm run sources
 npm run alpaca:account
 npm run alpaca:bars
+npm run alpaca:orders
+npm run alpaca:smoke-order
 npm test
 ```
 
@@ -91,6 +94,18 @@ Then verify the connection:
 ```powershell
 node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
+```
+
+To prove order submission without intending to fill, run a guarded smoke test. It submits a deliberately low paper limit order and immediately cancels it:
+
+```powershell
+node src/cli.js alpaca smoke-order --confirm-paper
+```
+
+To place a tiny simulated market order later:
+
+```powershell
+node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
 ```
 
 For audit output:
