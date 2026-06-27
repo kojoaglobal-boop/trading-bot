@@ -46,27 +46,53 @@ The project standard is defined in `SYSTEM_STANDARD.md`. Every build step must s
    - Schema: `db/schema.sql`
    - Current app write path: `node src/cli.js paper --ticks 200 --audit --db`
 
+## Market Rollout Order
+
+We build and prove one section at a time, in this order:
+
+1. Stocks
+   - Broker now: Alpaca paper.
+   - Possible live broker later: Alpaca, only if paper results and execution quality justify it.
+   - Reason first: cleanest current API path, easiest broker sync, lower operational complexity than futures or meme coins.
+
+2. Forex
+   - Broker/data next: OANDA demo.
+   - Reason second: 24/5 market, clear demo API, useful for disciplined spread/risk testing.
+
+3. Futures
+   - Likely providers later: Databento for data, Tradovate or another futures broker for execution.
+   - Reason third: strong opportunity, but leverage, fees, tick size, and contract specs make mistakes expensive.
+
+4. Meme coins / DEX
+   - Likely data later: DEXScreener and GeckoTerminal.
+   - Likely execution later: Jupiter or 0x with isolated wallet safety.
+   - Reason last: highest combined risk from liquidity traps, slippage, scams, wallet security, route quality, and MEV.
+
 ## Next Information Sources To Add
 
-1. Coinbase Advanced Trade API
-   - Purpose: crypto and meme coin data/trading.
+1. OANDA demo API
+   - Purpose: forex and XAU/USD style testing.
+   - Docs: https://developer.oanda.com/rest-live-v20/introduction/
+
+2. Databento
+   - Purpose: high-quality historical and live data, especially futures and better market microstructure research.
+   - Docs: https://databento.com/docs
+
+3. Tradovate
+   - Purpose: futures simulation and execution.
+   - Docs: https://api.tradovate.com/
+
+4. Coinbase Advanced Trade API
+   - Purpose: centralized crypto data/trading before DEX meme coin execution.
    - Docs: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/overview
    - Current public data command: `node src/cli.js crypto bars --provider coinbase --product BTC-USD --db`
    - Current quality gate: `node src/cli.js crypto quality --symbol BTC/USD --db`
 
-2. OANDA demo API
-   - Purpose: forex and XAU/USD style testing.
-   - Docs: https://developer.oanda.com/rest-live-v20/introduction/
+5. DEXScreener / GeckoTerminal / Jupiter / 0x
+   - Purpose: DEX meme coin discovery, DEX pool data, quotes, and eventual guarded wallet execution.
+   - Important: meme coin execution waits until stock, forex, and futures sections have a proven control system.
 
-3. Databento
-   - Purpose: high-quality historical and live data, especially futures and better market microstructure research.
-   - Docs: https://databento.com/docs
-
-4. Tradovate
-   - Purpose: futures simulation and execution.
-   - Docs: https://api.tradovate.com/
-
-5. OpenAI API
+6. OpenAI API
    - Purpose: research assistant, news summarizer, trade journal reviewer, strategy explainer, and anomaly detector.
    - Important: AI should not bypass strategy code or risk checks.
    - Pricing: https://openai.com/api/pricing/

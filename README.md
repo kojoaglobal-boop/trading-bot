@@ -2,14 +2,16 @@
 
 This is a paper-first trading bot scaffold for experimenting across four market families:
 
-- meme coins / crypto
 - stocks
-- futures
 - forex
+- futures
+- meme coins / crypto
 
 The first version does **not** place real trades. That is intentional. A bot that can trade of its own accord needs a strong test harness, a risk engine, clear live-trading gates, and enough paper results to prove it is not just getting lucky in one market regime.
 
 The engineering standard is documented in `SYSTEM_STANDARD.md`. The short version: no mystery data, no unchecked source, no strategy without proof, no live trading by default.
+
+Market rollout order: stocks first, forex second, futures third, meme coins last. Alpaca is the current stock paper broker; it is not the broker for every market.
 
 ## Quick Start
 
