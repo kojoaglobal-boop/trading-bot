@@ -17,8 +17,9 @@ From this folder:
 node src/cli.js backtest --sample
 node src/cli.js optimize --sample
 node src/cli.js walk-forward --sample
-node src/cli.js paper --ticks 200 --audit
+node src/cli.js paper --ticks 200 --audit --db
 node src/cli.js journal
+node src/cli.js journal --db
 node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
@@ -35,6 +36,7 @@ npm run optimize
 npm run walk-forward
 npm run paper
 npm run journal
+npm run journal:db
 npm run sources
 npm run db
 npm run alpaca:account
@@ -53,6 +55,7 @@ npm test
 - `src/core/market-data.js` loads CSV bars or generates deterministic sample data.
 - `src/core/source-registry.js` reports exactly which data, broker, and AI sources are configured.
 - `src/core/audit-log.js` writes JSON run records when `--audit` is used.
+- `src/core/database-journal.js` writes audited runs, fills, and risk rejections to Postgres when `--db` is used.
 - `compose.yaml` runs the local Postgres database in Docker.
 - `db/schema.sql` defines the first persistent storage tables.
 - `src/core/optimizer.js` runs parameter sweeps and walk-forward validation.
@@ -123,6 +126,13 @@ Review saved audit logs:
 
 ```powershell
 node src/cli.js journal
+```
+
+Write the same run to Postgres and read it back:
+
+```powershell
+node src/cli.js paper --ticks 200 --audit --db
+node src/cli.js journal --db
 ```
 
 ## Local Database
@@ -222,7 +232,7 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Connect the app journal to Postgres.
-3. Add real Alpaca paper strategy loop.
+2. Add real Alpaca paper strategy loop.
+3. Persist Alpaca account snapshots and orders.
 4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
 5. Add broker adapters one at a time, starting with paper/sandbox endpoints.

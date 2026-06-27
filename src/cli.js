@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { defaultConfig } from "./config/default.js";
-import { writeAuditLog } from "./core/audit-log.js";
+import { createAuditRecord, writeAuditRecord } from "./core/audit-log.js";
 import { loadDotEnv } from "./core/env-loader.js";
 import { runBacktest } from "./core/backtester.js";
 import { loadCsvBars, createSampleBars } from "./core/market-data.js";
@@ -11,6 +11,7 @@ import { formatReport } from "./core/report.js";
 import { assertLiveTradingAllowed } from "./core/live-gateway.js";
 import { formatJournal, loadAuditJournal } from "./core/journal.js";
 import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.js";
+import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journal.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -95,7 +96,9 @@ try {
   } else if (command === "sources") {
     console.log(formatSourceStatuses(getSourceStatuses()));
   } else if (command === "journal") {
-    const logs = await loadAuditJournal(args.logs || "logs");
+    const logs = args.db
+      ? await loadDatabaseJournal({ limit: Number(args.limit || 12) })
+      : await loadAuditJournal(args.logs || "logs");
     console.log(formatJournal(logs, { limit: Number(args.limit || 12) }));
   } else if (command === "db") {
     console.log(formatDatabaseConfig(getDatabaseConfig()));
@@ -225,14 +228,23 @@ function runSimulation(bars, mode, strategyOverrides = {}) {
 }
 
 async function maybeWriteAudit(report, args) {
-  if (!args.audit) {
+  if (!args.audit && !args.db) {
     return;
   }
 
-  const filePath = await writeAuditLog(report, {
-    directory: typeof args.audit === "string" ? args.audit : "logs"
-  });
-  console.log(`\nAudit log: ${filePath}`);
+  const audit = createAuditRecord(report);
+
+  if (args.audit) {
+    const filePath = await writeAuditRecord(audit, {
+      directory: typeof args.audit === "string" ? args.audit : "logs"
+    });
+    console.log(`\nAudit log: ${filePath}`);
+  }
+
+  if (args.db) {
+    const result = await writeAuditToDatabase(audit);
+    console.log(`Database audit: ${result.runId} (${result.fills} fills, ${result.rejections} rejections)`);
+  }
 }
 
 function printDoctor(envLoad) {
@@ -265,8 +277,9 @@ Usage:
   node src/cli.js backtest --csv ./data/bars.csv
   node src/cli.js optimize --sample
   node src/cli.js walk-forward --sample
-  node src/cli.js paper --ticks 200 --audit
+  node src/cli.js paper --ticks 200 --audit --db
   node src/cli.js journal
+  node src/cli.js journal --db
   node src/cli.js db
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
@@ -280,7 +293,7 @@ Commands:
   walk-forward
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
-  journal    Show saved audit-log summaries
+  journal    Show saved audit-log summaries. Add --db to read Postgres.
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   doctor     Print environment and safety-gate status

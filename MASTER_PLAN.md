@@ -39,6 +39,7 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
    - Purpose: persistent storage for runs, bars, signals, risk decisions, orders, fills, and account snapshots.
    - Runtime: Docker Compose
    - Schema: `db/schema.sql`
+   - Current app write path: `node src/cli.js paper --ticks 200 --audit --db`
 
 ## Next Information Sources To Add
 
@@ -151,9 +152,9 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Start and verify Docker Postgres.
-2. Connect the app journal to Postgres.
-3. Alpaca live-paper strategy loop.
+1. Alpaca live-paper strategy loop.
+2. Persist Alpaca account snapshots and broker orders.
+3. Dashboard.
 4. Dashboard.
 5. Coinbase crypto data adapter.
 6. OANDA demo adapter.
