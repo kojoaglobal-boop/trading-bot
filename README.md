@@ -58,6 +58,7 @@ npm run alpaca:paper-loop
 npm run crypto:coinbase
 npm run crypto:kraken
 npm run crypto:quality
+npm run excel:export
 npm test
 ```
 
@@ -72,6 +73,7 @@ npm test
 - `src/core/audit-log.js` writes JSON run records when `--audit` is used.
 - `src/core/database-journal.js` writes audited runs, fills, and risk rejections to Postgres when `--db` is used.
 - `src/core/database-market-data.js` stores normalized bars and reloads them for real-data backtests.
+- `src/core/excel-export.js` exports paper-trading records into CSV files that open in Excel.
 - `compose.yaml` runs the local Postgres database in Docker.
 - `db/schema.sql` defines the first persistent storage tables.
 - `src/core/optimizer.js` runs parameter sweeps and walk-forward validation.
@@ -189,6 +191,25 @@ Write the same run to Postgres and read it back:
 node src/cli.js paper --ticks 200 --audit --db
 node src/cli.js journal --db
 ```
+
+## Excel Tracking
+
+Postgres is the official record. Excel is for review and calculations.
+
+Export the paper ledger:
+
+```powershell
+node src/cli.js export paper-ledger
+```
+
+That writes CSV files into `reports/paper-ledger/`:
+
+- `paper_runs.csv`
+- `paper_signals.csv`
+- `paper_risk_decisions.csv`
+- `paper_orders.csv`
+- `paper_fills.csv`
+- `paper_account_snapshots.csv`
 
 ## Local Database
 

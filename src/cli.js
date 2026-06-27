@@ -12,6 +12,7 @@ import { assertLiveTradingAllowed } from "./core/live-gateway.js";
 import { formatJournal, loadAuditJournal } from "./core/journal.js";
 import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.js";
 import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journal.js";
+import { exportPaperLedger, formatPaperLedgerExport } from "./core/excel-export.js";
 import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
@@ -116,6 +117,8 @@ try {
     await runAlpacaCommand(args);
   } else if (command === "crypto") {
     await runCryptoCommand(args);
+  } else if (command === "export") {
+    await runExportCommand(args);
   } else {
     printHelp();
   }
@@ -322,6 +325,20 @@ async function runCryptoCommand(args) {
 `);
 }
 
+async function runExportCommand(args) {
+  const subcommand = args._[1] || "paper-ledger";
+
+  if (subcommand !== "paper-ledger") {
+    throw new Error(`Unknown export command: ${subcommand}`);
+  }
+
+  const result = await exportPaperLedger({
+    outDir: String(args.out || "reports/paper-ledger"),
+    limit: Number(args.limit || 500)
+  });
+  console.log(formatPaperLedgerExport(result));
+}
+
 function assertPaperConfirmation(args) {
   if (!args["confirm-paper"]) {
     throw new Error("Refusing to submit even a paper order without --confirm-paper.");
@@ -469,6 +486,7 @@ Usage:
   node src/cli.js alpaca sync
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
+  node src/cli.js export paper-ledger
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources
@@ -483,6 +501,7 @@ Commands:
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
+  export     Export database tracking files that open in Excel
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 
