@@ -1,5 +1,7 @@
 const DEFAULT_PAPER_BASE_URL = "https://paper-api.alpaca.markets";
 const DEFAULT_DATA_BASE_URL = "https://data.alpaca.markets";
+const TINY_MANUAL_MARKET_ORDER_CAP = 5;
+const LOOP_PAPER_MARKET_ORDER_CAP = 100;
 
 export class AlpacaClient {
   constructor({ env = process.env, fetchFn = globalThis.fetch } = {}) {
@@ -422,9 +424,18 @@ function validatePaperOrder(order) {
     throw new Error("Limit order requires qty and limit_price.");
   }
 
-  if (order.notional && Number(order.notional) > 5) {
-    throw new Error("Tiny paper market orders are capped at $5 notional.");
+  if (order.notional) {
+    const maxNotional = isLoopPaperOrder(order)
+      ? LOOP_PAPER_MARKET_ORDER_CAP
+      : TINY_MANUAL_MARKET_ORDER_CAP;
+    if (Number(order.notional) > maxNotional) {
+      throw new Error(`Paper market orders are capped at $${maxNotional} notional.`);
+    }
   }
+}
+
+function isLoopPaperOrder(order) {
+  return String(order.client_order_id || "").startsWith("tb-loop-");
 }
 
 function normalizeSymbol(symbol) {

@@ -4,13 +4,15 @@ export class MomentumBreakoutStrategy {
     slowPeriod = 21,
     breakoutLookback = 18,
     minVolumeExpansion = 1.05,
-    stopLossPct = 0.035
+    stopLossPct = 0.035,
+    takeProfitRR = 2.5
   } = {}) {
     this.fastPeriod = fastPeriod;
     this.slowPeriod = slowPeriod;
     this.breakoutLookback = breakoutLookback;
     this.minVolumeExpansion = minVolumeExpansion;
     this.stopLossPct = stopLossPct;
+    this.takeProfitRR = takeProfitRR;
     this.history = new Map();
   }
 
@@ -40,6 +42,7 @@ export class MomentumBreakoutStrategy {
         symbol: bar.symbol,
         assetClass: bar.assetClass,
         stopLossPct: this.stopLossPct,
+        targetRewardRiskRatio: this.takeProfitRR,
         confidence: clamp((fastSma / slowSma - 1) * 15 + 0.55, 0.1, 0.95),
         reason: `momentum breakout above ${round(breakoutHigh)}`
       };
@@ -49,9 +52,10 @@ export class MomentumBreakoutStrategy {
       const profitPct = bar.close / currentPosition.avgPrice - 1;
       const trendFailed = fastSma < slowSma;
       const stopFailed = profitPct <= -this.stopLossPct;
+      const targetHit = profitPct >= this.stopLossPct * this.takeProfitRR;
       const giveBack = profitPct > this.stopLossPct * 1.8 && bar.close < fastSma;
 
-      if (trendFailed || stopFailed || giveBack) {
+      if (trendFailed || stopFailed || targetHit || giveBack) {
         return {
           action: "SELL",
           symbol: bar.symbol,
@@ -59,7 +63,9 @@ export class MomentumBreakoutStrategy {
           confidence: 0.8,
           reason: stopFailed
             ? `stop loss at ${(profitPct * 100).toFixed(2)}%`
-            : "momentum exit"
+            : targetHit
+              ? `take profit at ${(profitPct / this.stopLossPct).toFixed(2)}R`
+              : "momentum exit"
         };
       }
     }

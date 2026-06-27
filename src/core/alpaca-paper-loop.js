@@ -12,10 +12,15 @@ export async function runAlpacaPaperLoop({
   feed = "iex",
   lookbackDays = 30,
   submitOrders = false,
-  maxBuyNotional = 5,
+  maxBuyNotional,
+  targetRewardRiskRatio,
   config = defaultConfig,
   now = new Date()
 }) {
+  const runConfig = createPaperTrainingConfig(config, {
+    maxBuyNotional,
+    targetRewardRiskRatio
+  });
   const createdAt = now.toISOString();
   const start = new Date(now.getTime() - Number(lookbackDays) * 24 * 60 * 60 * 1000).toISOString();
   const runId = createRunId(createdAt);
@@ -40,8 +45,8 @@ export async function runAlpacaPaperLoop({
   });
   const barsBySymbol = groupBarsBySymbol(alpacaBars);
   const portfolio = createPortfolioFromAlpaca(account, positions);
-  const riskEngine = new RiskEngine(config.risk);
-  const strategy = new MomentumBreakoutStrategy(config.strategy.momentumBreakout);
+  const riskEngine = new RiskEngine(runConfig.risk);
+  const strategy = new MomentumBreakoutStrategy(runConfig.strategy.momentumBreakout);
   const markPrices = new Map();
   const signals = [];
   const riskDecisions = [];
@@ -60,7 +65,7 @@ export async function runAlpacaPaperLoop({
         bar,
         mode: "alpaca-paper-warmup",
         portfolio,
-        config
+        config: runConfig
       });
       barsProcessed += 1;
     }
@@ -73,7 +78,7 @@ export async function runAlpacaPaperLoop({
       bar: latestBar,
       mode: "alpaca-paper",
       portfolio,
-      config
+      config: runConfig
     });
 
     const signalRecord = {
@@ -122,14 +127,16 @@ export async function runAlpacaPaperLoop({
 
     const request = createPaperMarketOrderFromRiskOrder({
       order: riskResult.order,
-      maxBuyNotional
+      maxBuyNotional: runConfig.paperTraining.maxBuyNotional
     });
+    const requestRisk = estimateRequestRisk(request, riskResult.order);
 
     if (!submitOrders) {
       orders.push({
         status: "planned",
         assetClass: latestBar.assetClass,
         request,
+        requestRisk,
         riskOrder: riskResult.order
       });
       continue;
@@ -140,6 +147,7 @@ export async function runAlpacaPaperLoop({
       status: submitted.status || "submitted",
       assetClass: latestBar.assetClass,
       request,
+      requestRisk,
       submitted,
       riskOrder: riskResult.order
     });
@@ -154,7 +162,9 @@ export async function runAlpacaPaperLoop({
     feed,
     lookbackDays,
     submitted: submitOrders,
-    maxBuyNotional,
+    maxBuyNotional: runConfig.paperTraining.maxBuyNotional,
+    targetRewardRiskRatio: runConfig.paperTraining.targetRewardRiskRatio,
+    targetRiskPerTradeDollars: runConfig.paperTraining.targetRiskPerTradeDollars,
     account: normalizeAccount(account),
     rawAccount: account,
     positions: positions.map(normalizeAlpacaPosition),
@@ -184,6 +194,8 @@ export function formatAlpacaPaperLoop(run) {
   lines.push(`Feed:          ${run.feed}`);
   lines.push(`Lookback days: ${run.lookbackDays}`);
   lines.push(`Bars:          ${run.barsProcessed}`);
+  lines.push(`Max buy size:  ${money(run.maxBuyNotional)}`);
+  lines.push(`Target R/R:    1:${Number(run.targetRewardRiskRatio || 0).toFixed(2)}`);
   lines.push(`Buying Power:  ${money(run.account.buyingPower)}`);
   lines.push(`Equity:        ${money(run.account.portfolioValue)}`);
   lines.push(`Signals:       ${run.summary.signals}`);
@@ -217,13 +229,85 @@ export function formatAlpacaPaperLoop(run) {
     lines.push("Paper Orders");
     for (const order of run.orders) {
       const request = order.request || {};
+      const requestRisk = order.requestRisk || {};
       lines.push(
-        `  ${String(request.symbol || "?").padEnd(6)} ${String(request.side || "?").padEnd(4)} ${order.status.padEnd(12)} notional=${request.notional || "n/a"} qty=${request.qty || "n/a"}`
+        `  ${String(request.symbol || "?").padEnd(6)} ${String(request.side || "?").padEnd(4)} ${order.status.padEnd(12)} notional=${request.notional || "n/a"} qty=${request.qty || "n/a"} risk=${money(requestRisk.estimatedRiskDollars || 0)} target=${money(requestRisk.targetProfitDollars || 0)}`
       );
     }
   }
 
   return lines.join("\n");
+}
+
+function estimateRequestRisk(request, riskOrder) {
+  const notional = Number(request.notional || 0) ||
+    Number(riskOrder.notional || 0) ||
+    Number(riskOrder.quantity || 0) * Number(riskOrder.expectedPrice || 0);
+  const stopLossPct = Number(riskOrder.stopLossPct || 0);
+  const targetRewardRiskRatio = Number(riskOrder.targetRewardRiskRatio || 0);
+  const estimatedRiskDollars = notional * stopLossPct;
+
+  return {
+    notional,
+    stopLossPct,
+    targetRewardRiskRatio,
+    estimatedRiskDollars,
+    targetProfitDollars: targetRewardRiskRatio > 0
+      ? estimatedRiskDollars * targetRewardRiskRatio
+      : null
+  };
+}
+
+function createPaperTrainingConfig(config, overrides = {}) {
+  const training = config.paperTraining || {};
+  const trainingRisk = training.risk || {};
+  const strategy = {
+    ...config.strategy,
+    momentumBreakout: {
+      ...config.strategy.momentumBreakout,
+      ...(training.strategy || {}),
+      takeProfitRR: Number(
+        overrides.targetRewardRiskRatio ||
+        training.targetRewardRiskRatio ||
+        config.strategy.momentumBreakout.takeProfitRR ||
+        2.5
+      )
+    }
+  };
+  const risk = {
+    ...config.risk,
+    ...trainingRisk,
+    maxSpreadBps: {
+      ...config.risk.maxSpreadBps,
+      ...(trainingRisk.maxSpreadBps || {})
+    },
+    minVolume: {
+      ...config.risk.minVolume,
+      ...(trainingRisk.minVolume || {})
+    },
+    maxAssetClassExposurePct: {
+      ...config.risk.maxAssetClassExposurePct,
+      ...(trainingRisk.maxAssetClassExposurePct || {})
+    },
+    targetRiskPerTradeDollars: Number(
+      training.targetRiskPerTradeDollars ||
+      trainingRisk.targetRiskPerTradeDollars ||
+      0
+    ),
+    targetRewardRiskRatio: strategy.momentumBreakout.takeProfitRR
+  };
+
+  return {
+    ...config,
+    strategy,
+    risk,
+    paperTraining: {
+      ...training,
+      maxBuyNotional: Number(overrides.maxBuyNotional || training.maxBuyNotional || 100),
+      targetRewardRiskRatio: strategy.momentumBreakout.takeProfitRR,
+      targetRiskPerTradeDollars: risk.targetRiskPerTradeDollars
+    }
+  };
 }
 
 export function normalizeAlpacaBars(payload, { feed, timeframe } = {}) {

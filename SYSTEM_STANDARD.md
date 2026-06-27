@@ -19,19 +19,22 @@ This project is not a toy bot and not a signal dashboard. Every component must b
 5. No win-rate worship.
    The scorecard is expectancy, profit factor, average win, average loss, drawdown, trade count, fees, slippage, and regime stability.
 
-6. No silent failures.
+6. No fake risk numbers.
+   Paper orders must log actual notional, estimated stop-risk, and target profit after any caps are applied.
+
+7. No silent failures.
    Missing data, stale data, broken API calls, rejected trades, and abnormal source disagreement must be logged.
 
-7. No untracked decisions.
+8. No untracked decisions.
    If the bot decides to trade or not trade, the reason must be stored.
 
-8. No weak secrets handling.
+9. No weak secrets handling.
    Real API keys stay in local `.env`, never Git, never chat, never logs.
 
-9. No untested core logic.
+10. No untested core logic.
    Every adapter, parser, risk rule, data-quality check, and strategy scoring module gets tests.
 
-10. No app-before-engine.
+11. No app-before-engine.
     A dashboard comes after the backend produces real, audited state.
 
 ## Required System Blocks

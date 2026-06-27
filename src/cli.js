@@ -225,7 +225,8 @@ async function runAlpacaCommand(args) {
       feed: String(args.feed || "iex"),
       lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30),
       submitOrders,
-      maxBuyNotional: Number(args.maxNotional || args["max-notional"] || 5)
+      maxBuyNotional: Number(args.maxNotional || args["max-notional"] || defaultConfig.paperTraining.maxBuyNotional),
+      targetRewardRiskRatio: Number(args.targetRR || args["target-rr"] || defaultConfig.paperTraining.targetRewardRiskRatio)
     });
 
     console.log(formatAlpacaPaperLoop(run));
@@ -265,7 +266,7 @@ async function runAlpacaCommand(args) {
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
-  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper
+  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper --max-notional 100 --target-rr 2.5
 `);
 }
 

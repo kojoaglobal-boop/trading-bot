@@ -63,6 +63,49 @@ test("risk engine sizes approved buy orders within max notional", () => {
   assert.equal(result.approved, true);
   assert.equal(result.order.symbol, "TSLA");
   assert.equal(result.order.quantity * result.order.expectedPrice <= 12000.01, true);
+  assert.equal(result.order.notional <= 12000.01, true);
+  assert.equal(result.order.estimatedRiskDollars, result.order.notional * 0.03);
+  assert.equal(result.order.targetRewardRiskRatio, 0);
+});
+
+test("risk engine records target reward and planned risk on approved buys", () => {
+  const risk = new RiskEngine({
+    ...defaultConfig.risk,
+    targetRiskPerTradeDollars: 30,
+    targetRewardRiskRatio: 2.5,
+    maxRiskPerTradePct: 0.06,
+    maxNotionalPerTradePct: 0.25
+  });
+  const portfolio = new Portfolio({ startingCash: 500 });
+
+  const result = risk.createOrder({
+    bar: {
+      time: new Date().toISOString(),
+      symbol: "TSLA",
+      assetClass: "stock",
+      open: 100,
+      high: 103,
+      low: 99,
+      close: 100,
+      volume: 500000,
+      bid: 99.99,
+      ask: 100
+    },
+    markPrices: new Map([["TSLA", 100]]),
+    portfolio,
+    signal: {
+      action: "BUY",
+      reason: "test",
+      stopLossPct: 0.035,
+      targetRewardRiskRatio: 2.5
+    }
+  });
+
+  assert.equal(result.approved, true);
+  assert.equal(result.order.notional, 125);
+  assert.equal(result.order.riskBudget, 30);
+  assert.equal(result.order.estimatedRiskDollars, 4.375);
+  assert.equal(result.order.targetProfitDollars, 10.9375);
 });
 
 test("risk engine allows exits even when spread is too wide for entries", () => {

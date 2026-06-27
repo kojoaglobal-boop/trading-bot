@@ -36,7 +36,20 @@ export const defaultConfig = {
       slowPeriod: 21,
       breakoutLookback: 18,
       minVolumeExpansion: 1.05,
-      stopLossPct: 0.035
+      stopLossPct: 0.035,
+      takeProfitRR: 2.5
+    }
+  },
+  paperTraining: {
+    maxBuyNotional: 100,
+    targetRiskPerTradeDollars: 30,
+    targetRewardRiskRatio: 2.5,
+    risk: {
+      maxRiskPerTradePct: 0.06,
+      maxNotionalPerTradePct: 0.25,
+      maxAssetClassExposurePct: {
+        stock: 0.5
+      }
     }
   },
   risk: {

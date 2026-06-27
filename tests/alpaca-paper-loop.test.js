@@ -92,7 +92,9 @@ test("runAlpacaPaperLoop logs signals and can submit capped paper orders", async
   assert.equal(run.signals[0].action, "BUY");
   assert.equal(run.riskDecisions[0].approved, true);
   assert.equal(run.orders.length, 1);
-  assert.equal(submittedOrders[0].notional, "5.00");
+  assert.equal(submittedOrders[0].notional, "100.00");
+  assert.equal(run.orders[0].requestRisk.estimatedRiskDollars, 3.5000000000000004);
+  assert.equal(Number(run.orders[0].requestRisk.targetProfitDollars.toFixed(2)), 8.75);
   assert.match(formatAlpacaPaperLoop(run), /Alpaca Live-Paper Strategy Loop/);
 });
 

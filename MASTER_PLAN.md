@@ -171,6 +171,7 @@ Do not install yet:
 - GitHub-backed repo, VS Code, Node.js, Python, WSL, Docker Desktop.
 - Local Postgres database with durable tables for runs, bars, signals, decisions, orders, fills, account state, and data-quality checks.
 - Alpaca paper account connection, guarded paper-order smoke test, paper loop, and broker sync.
+- Alpaca paper-training sizing: `$100` max paper buy notional, `1:2.5` target R/R, actual risk/target logging.
 - Coinbase and Kraken public crypto data ingestion into normalized market bars.
 - Coinbase/Kraken stored-data quality gate.
 - Stored crypto backtests require a fresh `PASS` quality gate before strategy execution.

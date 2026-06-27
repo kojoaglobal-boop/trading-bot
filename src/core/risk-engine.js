@@ -75,7 +75,7 @@ export class RiskEngine {
     }
 
     const stopLossPct = Math.max(signal.stopLossPct || 0.02, 0.005);
-    const riskBudget = snapshot.equity * this.config.maxRiskPerTradePct;
+    const riskBudget = this.calculateRiskBudget(snapshot);
     const riskBasedNotional = riskBudget / stopLossPct;
     const maxNotional = snapshot.equity * this.config.maxNotionalPerTradePct;
     const currentClassExposure = snapshot.exposure[bar.assetClass] || 0;
@@ -95,14 +95,29 @@ export class RiskEngine {
       return reject("invalid order quantity");
     }
 
+    const estimatedRiskDollars = notional * stopLossPct;
+    const targetRewardRiskRatio = Number(signal.targetRewardRiskRatio || this.config.targetRewardRiskRatio || 0);
+
     return approve({
       symbol: bar.symbol,
       assetClass: bar.assetClass,
       side: "BUY",
       quantity,
+      notional,
       expectedPrice: entryPrice,
+      stopLossPct,
+      riskBudget,
+      estimatedRiskDollars,
+      targetRewardRiskRatio,
+      targetProfitDollars: targetRewardRiskRatio > 0 ? estimatedRiskDollars * targetRewardRiskRatio : null,
       reason: signal.reason
     });
+  }
+
+  calculateRiskBudget(snapshot) {
+    const pctBudget = snapshot.equity * this.config.maxRiskPerTradePct;
+    const targetBudget = Number(this.config.targetRiskPerTradeDollars || 0);
+    return targetBudget > 0 ? targetBudget : pctBudget;
   }
 
   createSellOrder({ bar, portfolio, signal }) {

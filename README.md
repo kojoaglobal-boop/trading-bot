@@ -137,10 +137,10 @@ Run one live-paper strategy cycle using Alpaca historical/current bars, risk che
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 ```
 
-To let that loop submit paper orders, add the explicit paper confirmation. Buy orders are capped to a small notional by default:
+To let that loop submit paper orders, add the explicit paper confirmation. The paper-training loop is capped at `$100` max buy notional by default and logs the estimated stop-risk and target profit for each order:
 
 ```powershell
-node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper
+node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper --max-notional 100 --target-rr 2.5
 ```
 
 Sync the Alpaca paper broker state into Postgres:
@@ -229,6 +229,17 @@ The included starter strategy is a long-only momentum breakout system:
 - sell when trend rolls over
 
 This is not a prediction machine or a promise of profit. It is a testable baseline that gives us a working loop: data in, signal out, risk check, paper fill, portfolio update, report.
+
+## Paper Training Sizing
+
+The current Alpaca paper-training profile is intentionally bigger than the original smoke-test size:
+
+- max buy notional: `$100`
+- target risk/reward: `1:2.5`
+- target paper risk budget: `$30`, capped by available cash, exposure, and max notional
+- manual one-off market smoke orders still cap at `$5`
+
+On a `$100` stock position with a `3.5%` stop, actual stop-risk is about `$3.50`. To truly risk `$20-$30` per trade on a `$500` account, the bot would need a larger position, margin, or a much wider stop. For now, the paper loop logs the actual risk on the order it sends, so the numbers stay honest.
 
 ## Strategy Research
 

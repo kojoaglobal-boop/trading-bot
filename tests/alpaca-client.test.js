@@ -262,6 +262,18 @@ test("risk orders convert to capped Alpaca paper market orders", () => {
   assert.equal(buy.notional, "5.00");
   assert.match(buy.client_order_id, /^tb-loop-/);
 
+  const trainingBuy = createPaperMarketOrderFromRiskOrder({
+    order: {
+      symbol: "tsla",
+      side: "BUY",
+      quantity: 10,
+      expectedPrice: 250
+    },
+    maxBuyNotional: 100
+  });
+
+  assert.equal(trainingBuy.notional, "100.00");
+
   assert.deepEqual(createPaperMarketOrderFromRiskOrder({
     order: {
       symbol: "TSLA",
@@ -271,6 +283,40 @@ test("risk orders convert to capped Alpaca paper market orders", () => {
     },
     maxBuyNotional: 5
   }).qty, "1.25");
+});
+
+test("loop paper orders allow training-size notional while manual tiny orders stay capped", async () => {
+  const submitted = [];
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret"
+    },
+    fetchFn: async (_url, options) => {
+      submitted.push(JSON.parse(options.body));
+      return jsonResponse({ id: "order-1", status: "accepted" });
+    }
+  });
+  const loopOrder = createPaperMarketOrderFromRiskOrder({
+    order: {
+      symbol: "TSLA",
+      side: "BUY",
+      quantity: 10,
+      expectedPrice: 250
+    },
+    maxBuyNotional: 100
+  });
+
+  await client.submitOrder(loopOrder);
+
+  assert.equal(submitted[0].notional, "100.00");
+  await assert.rejects(
+    () => client.submitOrder({
+      ...loopOrder,
+      notional: "101.00"
+    }),
+    /capped at \$100/
+  );
 });
 
 test("Alpaca formatters do not reveal credentials", () => {
