@@ -20,6 +20,7 @@ node src/cli.js walk-forward --sample
 node src/cli.js paper --ticks 200 --audit
 node src/cli.js journal
 node src/cli.js sources
+node src/cli.js db
 node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca smoke-order --confirm-paper
@@ -35,6 +36,7 @@ npm run walk-forward
 npm run paper
 npm run journal
 npm run sources
+npm run db
 npm run alpaca:account
 npm run alpaca:bars
 npm run alpaca:orders
@@ -51,6 +53,8 @@ npm test
 - `src/core/market-data.js` loads CSV bars or generates deterministic sample data.
 - `src/core/source-registry.js` reports exactly which data, broker, and AI sources are configured.
 - `src/core/audit-log.js` writes JSON run records when `--audit` is used.
+- `compose.yaml` runs the local Postgres database in Docker.
+- `db/schema.sql` defines the first persistent storage tables.
 - `src/core/optimizer.js` runs parameter sweeps and walk-forward validation.
 - `src/core/analytics.js` calculates closed trades, win rate, and profit factor.
 - `src/strategies/momentum-breakout.js` contains the first strategy.
@@ -121,6 +125,35 @@ Review saved audit logs:
 node src/cli.js journal
 ```
 
+## Local Database
+
+Docker runs the local Postgres database. This is where the bot will store durable trade history, signals, risk decisions, orders, fills, account snapshots, and backtest runs.
+
+Start the database:
+
+```powershell
+npm run db:up
+```
+
+Check it:
+
+```powershell
+npm run db:status
+node src/cli.js db
+```
+
+Stop it:
+
+```powershell
+npm run db:down
+```
+
+The database schema lives in `db/schema.sql`. Docker applies it automatically the first time the database volume is created. Re-apply it manually with:
+
+```powershell
+npm run db:schema
+```
+
 ## Current Strategy
 
 The included starter strategy is a long-only momentum breakout system:
@@ -189,7 +222,7 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Add persistent trade logs.
-3. Add walk-forward testing and parameter sweeps.
+2. Connect the app journal to Postgres.
+3. Add real Alpaca paper strategy loop.
 4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
 5. Add broker adapters one at a time, starting with paper/sandbox endpoints.

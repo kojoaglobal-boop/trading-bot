@@ -13,6 +13,7 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
 - Alpaca paper account status: working
 - Alpaca IEX market data: working
 - Alpaca paper order smoke test: working
+- Local database runtime: Docker Desktop with Postgres
 
 ## Current Information Sources
 
@@ -33,6 +34,11 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
 4. CSV data
    - Purpose: backtesting imported historical data from brokers or vendors.
    - Loader: `src/core/market-data.js`
+
+5. Local Postgres database
+   - Purpose: persistent storage for runs, bars, signals, risk decisions, orders, fills, and account snapshots.
+   - Runtime: Docker Compose
+   - Schema: `db/schema.sql`
 
 ## Next Information Sources To Add
 
@@ -134,6 +140,7 @@ Already installed:
 - VS Code
 - Node.js/npm
 - Python/pip
+- Docker Desktop
 
 Do not install yet:
 
@@ -144,9 +151,9 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Alpaca live-paper strategy loop.
-2. Persistent trade/signal journal.
-3. Docker database stack.
+1. Start and verify Docker Postgres.
+2. Connect the app journal to Postgres.
+3. Alpaca live-paper strategy loop.
 4. Dashboard.
 5. Coinbase crypto data adapter.
 6. OANDA demo adapter.

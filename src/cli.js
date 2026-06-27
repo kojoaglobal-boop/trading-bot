@@ -10,6 +10,7 @@ import { RiskEngine } from "./core/risk-engine.js";
 import { formatReport } from "./core/report.js";
 import { assertLiveTradingAllowed } from "./core/live-gateway.js";
 import { formatJournal, loadAuditJournal } from "./core/journal.js";
+import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -96,6 +97,8 @@ try {
   } else if (command === "journal") {
     const logs = await loadAuditJournal(args.logs || "logs");
     console.log(formatJournal(logs, { limit: Number(args.limit || 12) }));
+  } else if (command === "db") {
+    console.log(formatDatabaseConfig(getDatabaseConfig()));
   } else if (command === "alpaca") {
     await runAlpacaCommand(args);
   } else {
@@ -241,6 +244,8 @@ function printDoctor(envLoad) {
   console.log(`Starting cash: $${defaultConfig.account.startingCash.toLocaleString("en-US")}`);
   console.log(`Max trade risk: ${(defaultConfig.risk.maxRiskPerTradePct * 100).toFixed(2)}%`);
   console.log(`Max drawdown: ${(defaultConfig.risk.maxDrawdownPct * 100).toFixed(2)}%`);
+  const database = getDatabaseConfig();
+  console.log(`Database: ${database.user}@${database.host}:${database.port}/${database.database}`);
 
   try {
     assertLiveTradingAllowed();
@@ -262,6 +267,7 @@ Usage:
   node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit
   node src/cli.js journal
+  node src/cli.js db
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
   node src/cli.js alpaca smoke-order --confirm-paper
@@ -275,6 +281,7 @@ Commands:
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
   journal    Show saved audit-log summaries
+  db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration

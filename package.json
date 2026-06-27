@@ -16,6 +16,11 @@
     "alpaca:bars": "node src/cli.js alpaca bars --symbols TSLA,AAPL",
     "alpaca:orders": "node src/cli.js alpaca orders",
     "alpaca:smoke-order": "node src/cli.js alpaca smoke-order --confirm-paper",
+    "db": "node src/cli.js db",
+    "db:up": "docker compose up -d db",
+    "db:status": "docker compose ps",
+    "db:schema": "docker compose exec -T db psql -U trading_bot -d trading_bot -f /docker-entrypoint-initdb.d/001_schema.sql",
+    "db:down": "docker compose down",
     "test": "node --test"
   },
   "engines": {
