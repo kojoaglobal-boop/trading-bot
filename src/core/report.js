@@ -15,6 +15,10 @@ export function formatReport(report) {
   lines.push(`Closed trades:   ${metrics.closedTrades}`);
   lines.push(`Win rate:        ${pct(metrics.winRate)}`);
   lines.push(`Profit factor:   ${formatProfitFactor(metrics.profitFactor)}`);
+  lines.push(`Payoff ratio:    ${formatProfitFactor(metrics.payoffRatio)}`);
+  lines.push(`Average win:     ${money(metrics.averageWin)}`);
+  lines.push(`Average loss:    ${money(metrics.averageLoss)}`);
+  lines.push(`Expectancy:      ${money(metrics.expectancyPerTrade)} / trade (${pct(metrics.expectancyReturnPct)} avg return)`);
   lines.push(`Rejected trades: ${metrics.rejections}`);
 
   if (report.sources?.length) {

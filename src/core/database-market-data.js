@@ -70,8 +70,16 @@ export async function upsertMarketBars(bars, options = {}) {
   }
 }
 
-export async function loadRecentMarketBars({ source, mode, symbols = [], limit = 20, pool = createDatabasePool() } = {}) {
-  const shouldClosePool = !arguments[0]?.pool;
+export async function loadRecentMarketBars(options = {}) {
+  const {
+    source,
+    mode,
+    symbols = [],
+    limit = 20,
+    pool = createDatabasePool()
+  } = options;
+  const shouldClosePool = !options.pool;
+
   try {
     return await withDatabaseClient(async (client) => {
       const params = [source, mode, limit];
@@ -103,6 +111,82 @@ export async function loadRecentMarketBars({ source, mode, symbols = [], limit =
           ${symbolFilter}
         ORDER BY bar_time DESC
         LIMIT $3`,
+        params
+      );
+
+      return result.rows.map(rowToBar);
+    }, { pool });
+  } finally {
+    if (shouldClosePool && pool.end) {
+      await pool.end();
+    }
+  }
+}
+
+export async function loadMarketBars(options = {}) {
+  const {
+    source,
+    mode = "public-market-data",
+    symbols = [],
+    limit = 260,
+    pool = createDatabasePool()
+  } = options;
+  const shouldClosePool = !options.pool;
+
+  if (!source) {
+    throw new Error("Market bar source is required.");
+  }
+
+  try {
+    return await withDatabaseClient(async (client) => {
+      const params = [source, mode, Number(limit)];
+      const symbolFilter = symbols.length
+        ? `AND symbol = ANY($4)`
+        : "";
+
+      if (symbols.length) {
+        params.push(symbols);
+      }
+
+      const result = await client.query(
+        `WITH ranked_bars AS (
+          SELECT
+            source,
+            mode,
+            symbol,
+            asset_class,
+            venue,
+            bar_time,
+            open,
+            high,
+            low,
+            close,
+            volume,
+            bid,
+            ask,
+            row_number() OVER (PARTITION BY symbol ORDER BY bar_time DESC) AS recency_rank
+          FROM market_bars
+          WHERE source = $1
+            AND mode = $2
+            ${symbolFilter}
+        )
+        SELECT
+          source,
+          mode,
+          symbol,
+          asset_class,
+          venue,
+          bar_time,
+          open,
+          high,
+          low,
+          close,
+          volume,
+          bid,
+          ask
+        FROM ranked_bars
+        WHERE recency_rank <= $3
+        ORDER BY bar_time ASC, symbol ASC`,
         params
       );
 

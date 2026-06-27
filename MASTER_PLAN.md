@@ -2,6 +2,8 @@
 
 This bot must be testable, source-transparent, and paper-first. No hidden feeds, no mystery signals, no live money until the system has a long paper-trading record.
 
+The project standard is defined in `SYSTEM_STANDARD.md`. Every build step must serve the final system, not a temporary weak version.
+
 ## Current Working Stack
 
 - Code editor: VS Code
@@ -14,6 +16,7 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
 - Alpaca IEX market data: working
 - Alpaca paper order smoke test: working
 - Local database runtime: Docker Desktop with Postgres
+- Default simulated capital: $500, matched to the current Alpaca paper account
 
 ## Current Information Sources
 
@@ -156,11 +159,20 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Use quality-approved Coinbase/Kraken crypto bars in the strategy engine.
+1. Require data-quality pass before strategy runs consume stored crypto bars.
 2. Run repeated Alpaca paper-loop sessions and sync after each session.
-3. Dashboard.
+3. Scheduler.
 4. Dashboard.
-5. Coinbase crypto data adapter.
-6. OANDA demo adapter.
-7. Strategy ensemble and scoring.
-8. AI research/journal layer.
+5. OANDA demo adapter.
+6. Strategy ensemble and scoring.
+7. AI research/journal layer.
+
+## Completed Final-System Blocks
+
+- GitHub-backed repo, VS Code, Node.js, Python, WSL, Docker Desktop.
+- Local Postgres database with durable tables for runs, bars, signals, decisions, orders, fills, account state, and data-quality checks.
+- Alpaca paper account connection, guarded paper-order smoke test, paper loop, and broker sync.
+- Coinbase and Kraken public crypto data ingestion into normalized market bars.
+- Coinbase/Kraken stored-data quality gate.
+- Real-data backtesting from Postgres bars.
+- Expectancy, payoff ratio, average win/loss, profit factor, drawdown, and win-rate reporting.

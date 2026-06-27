@@ -30,5 +30,8 @@ test("backtester processes sample bars and returns account metrics", () => {
   assert.equal(report.account.finalEquity > 0, true);
   assert.equal(Number.isFinite(report.metrics.winRate), true);
   assert.equal(Number.isFinite(report.metrics.averageTradePnl), true);
+  assert.equal("payoffRatio" in report.metrics, true);
+  assert.equal(Number.isFinite(report.metrics.expectancyPerTrade), true);
+  assert.equal(Number.isFinite(report.metrics.expectancyReturnPct), true);
   assert.equal(Array.isArray(report.equityCurve), true);
 });

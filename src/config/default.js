@@ -1,7 +1,7 @@
 export const defaultConfig = {
   account: {
     baseCurrency: "USD",
-    startingCash: 100000
+    startingCash: 500
   },
   universe: [
     {

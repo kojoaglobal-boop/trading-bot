@@ -16,7 +16,7 @@ import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
-import { upsertMarketBars } from "./core/database-market-data.js";
+import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
 import { formatDataQualityCheck, runStoredDataQualityCheck, writeDataQualityCheck } from "./core/data-quality.js";
 import {
   formatSweepResult,
@@ -45,13 +45,10 @@ const envLoad = await loadDotEnv(args.env || ".env");
 
 try {
   if (command === "backtest") {
-    const bars = args.csv
-      ? await loadCsvBars(args.csv)
-      : createSampleBars({
-          symbols: defaultConfig.universe,
-          barsPerSymbol: Number(args.bars || 260),
-          seed: Number(args.seed || 42)
-        });
+    const bars = await loadBarsFromArgs(args, {
+      defaultBars: Number(args.bars || 260),
+      seed: Number(args.seed || 42)
+    });
 
     const report = runSimulation(bars, "backtest");
     console.log(formatReport(report));
@@ -326,13 +323,40 @@ function assertPaperConfirmation(args) {
 }
 
 async function loadBarsFromArgs(args, { defaultBars, seed }) {
-  return args.csv
-    ? loadCsvBars(args.csv)
-    : createSampleBars({
-        symbols: defaultConfig.universe,
-        barsPerSymbol: defaultBars,
-        seed
-      });
+  if (args.csv) {
+    return loadCsvBars(args.csv);
+  }
+
+  const dbSource = args.dbSource || args["db-source"];
+  if (dbSource) {
+    const symbols = parseList(args.dbSymbols || args["db-symbols"]);
+    const mode = String(args.dbMode || args["db-mode"] || "public-market-data");
+    const bars = await loadMarketBars({
+      source: String(dbSource).toLowerCase(),
+      mode,
+      symbols,
+      limit: Number(args.dbLimit || args["db-limit"] || defaultBars)
+    });
+
+    if (!bars.length) {
+      throw new Error(`No database bars found for source=${dbSource} mode=${mode}${symbols.length ? ` symbols=${symbols.join(",")}` : ""}.`);
+    }
+
+    return bars;
+  }
+
+  return createSampleBars({
+    symbols: defaultConfig.universe,
+    barsPerSymbol: defaultBars,
+    seed
+  });
+}
+
+function parseList(value) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean);
 }
 
 function runSimulation(bars, mode, strategyOverrides = {}) {
@@ -406,6 +430,7 @@ function printHelp() {
 Usage:
   node src/cli.js backtest --sample
   node src/cli.js backtest --csv ./data/bars.csv
+  node src/cli.js backtest --db-source coinbase --db-symbols BTC/USD --db-limit 120
   node src/cli.js optimize --sample
   node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit --db

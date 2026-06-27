@@ -9,6 +9,8 @@ This is a paper-first trading bot scaffold for experimenting across four market 
 
 The first version does **not** place real trades. That is intentional. A bot that can trade of its own accord needs a strong test harness, a risk engine, clear live-trading gates, and enough paper results to prove it is not just getting lucky in one market regime.
 
+The engineering standard is documented in `SYSTEM_STANDARD.md`. The short version: no mystery data, no unchecked source, no strategy without proof, no live trading by default.
+
 ## Quick Start
 
 From this folder:
@@ -27,6 +29,9 @@ node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 node src/cli.js alpaca sync
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
+node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
+node src/cli.js crypto quality --symbol BTC/USD --db
+node src/cli.js backtest --db-source coinbase --db-symbols BTC/USD --db-limit 120 --db
 node src/cli.js alpaca smoke-order --confirm-paper
 node --test
 ```
@@ -66,10 +71,11 @@ npm test
 - `src/core/source-registry.js` reports exactly which data, broker, and AI sources are configured.
 - `src/core/audit-log.js` writes JSON run records when `--audit` is used.
 - `src/core/database-journal.js` writes audited runs, fills, and risk rejections to Postgres when `--db` is used.
+- `src/core/database-market-data.js` stores normalized bars and reloads them for real-data backtests.
 - `compose.yaml` runs the local Postgres database in Docker.
 - `db/schema.sql` defines the first persistent storage tables.
 - `src/core/optimizer.js` runs parameter sweeps and walk-forward validation.
-- `src/core/analytics.js` calculates closed trades, win rate, and profit factor.
+- `src/core/analytics.js` calculates closed trades, win rate, profit factor, payoff ratio, and expectancy.
 - `src/strategies/momentum-breakout.js` contains the first strategy.
 - `src/core/live-gateway.js` blocks live trading unless explicit gates are added later.
 
@@ -155,6 +161,12 @@ node src/cli.js crypto quality --symbol BTC/USD --db
 
 Coinbase is the primary crypto source. Kraken is the independent fallback/check.
 The quality command compares the latest stored bars and flags stale data, timestamp mismatch, or abnormal price disagreement.
+
+Backtest directly from stored real-market bars:
+
+```powershell
+node src/cli.js backtest --db-source coinbase --db-symbols BTC/USD --db-limit 120 --db
+```
 
 For audit output:
 
@@ -270,9 +282,10 @@ Live trading is deliberately blocked in this scaffold. Before we add broker adap
 
 The goal is not to make the bot fearless. The goal is to make it disciplined.
 
-## Next Build Steps
+## Next Required Build Blocks
 
-1. Add real market data ingestion for one venue first.
-2. Use quality-approved Coinbase/Kraken crypto bars in the strategy engine.
-3. Run repeated Alpaca paper-loop sessions and sync after each session.
-4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
+1. Require data-quality pass before strategy runs consume stored crypto bars.
+2. Run repeated Alpaca paper-loop sessions and sync after each session.
+3. Add the scheduler for data pulls, quality checks, paper loops, and broker sync.
+4. Add the dashboard for equity, open positions, blocked trades, source health, and recent decisions.
+5. Add OANDA demo forex/XAU data and execution.
