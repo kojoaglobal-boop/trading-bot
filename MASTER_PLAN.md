@@ -48,6 +48,7 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
 1. Coinbase Advanced Trade API
    - Purpose: crypto and meme coin data/trading.
    - Docs: https://docs.cdp.coinbase.com/coinbase-app/advanced-trade-apis/overview
+   - Current public data command: `node src/cli.js crypto bars --provider coinbase --product BTC-USD --db`
 
 2. OANDA demo API
    - Purpose: forex and XAU/USD style testing.
@@ -154,9 +155,9 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Run repeated Alpaca paper-loop sessions and sync after each session.
-2. Dashboard.
-3. Coinbase crypto data adapter.
+1. Use Coinbase/Kraken crypto bars in the strategy engine.
+2. Run repeated Alpaca paper-loop sessions and sync after each session.
+3. Dashboard.
 4. Dashboard.
 5. Coinbase crypto data adapter.
 6. OANDA demo adapter.

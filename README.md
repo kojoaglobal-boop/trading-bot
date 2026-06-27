@@ -26,6 +26,7 @@ node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 node src/cli.js alpaca sync
+node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js alpaca smoke-order --confirm-paper
 node --test
 ```
@@ -49,6 +50,8 @@ npm run alpaca:fills
 npm run alpaca:sync
 npm run alpaca:smoke-order
 npm run alpaca:paper-loop
+npm run crypto:coinbase
+npm run crypto:kraken
 npm test
 ```
 
@@ -140,6 +143,15 @@ node src/cli.js alpaca sync
 ```
 
 That stores the latest account snapshot, open positions, recent orders, and recent fill activities.
+
+Pull crypto/meme coin bars through our own normalized data layer:
+
+```powershell
+node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
+node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
+```
+
+Coinbase is the primary crypto source. Kraken is the independent fallback/check.
 
 For audit output:
 
@@ -258,6 +270,6 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Run repeated Alpaca paper-loop sessions and sync after each session.
-3. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
-4. Add broker adapters one at a time, starting with paper/sandbox endpoints.
+2. Use Coinbase/Kraken crypto bars in the strategy engine.
+3. Run repeated Alpaca paper-loop sessions and sync after each session.
+4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.

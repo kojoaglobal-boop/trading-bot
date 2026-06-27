@@ -21,6 +21,8 @@
     "alpaca:sync": "node src/cli.js alpaca sync",
     "alpaca:smoke-order": "node src/cli.js alpaca smoke-order --confirm-paper",
     "alpaca:paper-loop": "node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db",
+    "crypto:coinbase": "node src/cli.js crypto bars --provider coinbase --product BTC-USD --db",
+    "crypto:kraken": "node src/cli.js crypto bars --provider kraken --pair BTC/USD --db",
     "db": "node src/cli.js db",
     "db:up": "docker compose up -d db",
     "db:status": "docker compose ps",

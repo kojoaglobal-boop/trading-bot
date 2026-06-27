@@ -15,6 +15,8 @@ import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journ
 import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
+import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
+import { upsertMarketBars } from "./core/database-market-data.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -109,6 +111,8 @@ try {
     console.log(formatDatabaseConfig(getDatabaseConfig()));
   } else if (command === "alpaca") {
     await runAlpacaCommand(args);
+  } else if (command === "crypto") {
+    await runCryptoCommand(args);
   } else {
     printHelp();
   }
@@ -262,6 +266,37 @@ async function runAlpacaCommand(args) {
 `);
 }
 
+async function runCryptoCommand(args) {
+  const subcommand = args._[1] || "help";
+
+  if (subcommand === "bars") {
+    const result = await fetchCryptoBars({
+      provider: String(args.provider || "coinbase").toLowerCase(),
+      product: String(args.product || "BTC-USD"),
+      pair: String(args.pair || "BTC/USD"),
+      granularity: String(args.granularity || "ONE_HOUR"),
+      interval: Number(args.interval || 60),
+      limit: Number(args.limit || 120),
+      lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30)
+    });
+
+    console.log(formatCryptoBars(result));
+
+    if (args.db) {
+      const stored = await upsertMarketBars(result.bars);
+      console.log(`Database market bars: ${stored.bars} bars (${stored.symbols.join(", ")}) from ${stored.sources.join(", ")}`);
+    }
+    return;
+  }
+
+  console.log(`Crypto Commands
+===============
+  node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
+  node src/cli.js crypto bars --provider coinbase --product PEPE-USD --db
+  node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
+`);
+}
+
 function assertPaperConfirmation(args) {
   if (!args["confirm-paper"]) {
     throw new Error("Refusing to submit even a paper order without --confirm-paper.");
@@ -359,6 +394,7 @@ Usage:
   node src/cli.js alpaca bars --symbols TSLA,AAPL
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
   node src/cli.js alpaca sync
+  node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources
@@ -372,6 +408,7 @@ Commands:
   journal    Show saved audit-log summaries. Add --db to read Postgres.
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
+  crypto     Pull public crypto/meme coin bars through the normalized data layer
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 
