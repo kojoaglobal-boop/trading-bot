@@ -17,6 +17,7 @@
     "alpaca:bars": "node src/cli.js alpaca bars --symbols TSLA,AAPL",
     "alpaca:orders": "node src/cli.js alpaca orders",
     "alpaca:smoke-order": "node src/cli.js alpaca smoke-order --confirm-paper",
+    "alpaca:paper-loop": "node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db",
     "db": "node src/cli.js db",
     "db:up": "docker compose up -d db",
     "db:status": "docker compose ps",

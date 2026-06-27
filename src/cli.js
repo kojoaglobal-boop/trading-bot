@@ -12,6 +12,8 @@ import { assertLiveTradingAllowed } from "./core/live-gateway.js";
 import { formatJournal, loadAuditJournal } from "./core/journal.js";
 import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.js";
 import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journal.js";
+import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
+import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -178,6 +180,36 @@ async function runAlpacaCommand(args) {
     return;
   }
 
+  if (subcommand === "paper-loop") {
+    const submitOrders = Boolean(args["confirm-paper"]);
+    const symbols = String(args.symbols || "TSLA,AAPL")
+      .split(",")
+      .map((symbol) => symbol.trim().toUpperCase())
+      .filter(Boolean);
+    const run = await runAlpacaPaperLoop({
+      client,
+      symbols,
+      timeframe: String(args.timeframe || "1Hour"),
+      bars: Number(args.bars || 80),
+      feed: String(args.feed || "iex"),
+      lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30),
+      submitOrders,
+      maxBuyNotional: Number(args.maxNotional || args["max-notional"] || 5)
+    });
+
+    console.log(formatAlpacaPaperLoop(run));
+
+    if (args.db) {
+      const result = await writeAlpacaPaperRunToDatabase(run);
+      console.log(`Database live-paper run: ${result.runId} (${result.signals} signals, ${result.riskDecisions} risk decisions, ${result.orders} orders)`);
+    }
+
+    if (!submitOrders) {
+      console.log("\nNo paper orders were submitted. Add --confirm-paper to allow Alpaca paper orders.");
+    }
+    return;
+  }
+
   console.log(`Alpaca Commands
 ===============
   node src/cli.js alpaca account
@@ -185,6 +217,8 @@ async function runAlpacaCommand(args) {
   node src/cli.js alpaca orders
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
+  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper
 `);
 }
 
@@ -283,6 +317,7 @@ Usage:
   node src/cli.js db
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
+  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources

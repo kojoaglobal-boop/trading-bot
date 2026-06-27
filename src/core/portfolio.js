@@ -1,9 +1,30 @@
 export class Portfolio {
-  constructor({ startingCash }) {
+  constructor({ startingCash, cash = startingCash, positions = [] }) {
     this.startingCash = startingCash;
-    this.cash = startingCash;
+    this.cash = cash;
     this.positions = new Map();
     this.realizedPnl = 0;
+
+    for (const position of positions) {
+      this.loadPosition(position);
+    }
+  }
+
+  loadPosition({ symbol, assetClass, quantity, avgPrice, realizedPnl = 0 }) {
+    const parsedQuantity = Number(quantity);
+    const parsedAvgPrice = Number(avgPrice);
+
+    if (!symbol || !Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      return;
+    }
+
+    this.positions.set(symbol, {
+      symbol,
+      assetClass,
+      quantity: parsedQuantity,
+      avgPrice: Number.isFinite(parsedAvgPrice) ? parsedAvgPrice : 0,
+      realizedPnl: Number(realizedPnl) || 0
+    });
   }
 
   applyFill(fill) {

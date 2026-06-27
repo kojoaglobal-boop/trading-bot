@@ -41,6 +41,40 @@ export class AlpacaClient {
     return this.requestJson(url);
   }
 
+  async getStockBars({
+    symbols,
+    timeframe = "1Hour",
+    limit = 80,
+    feed = "iex",
+    start,
+    end
+  }) {
+    if (!Array.isArray(symbols) || symbols.length === 0) {
+      throw new Error("At least one stock symbol is required.");
+    }
+
+    const url = new URL(`${this.dataBaseUrl}/v2/stocks/bars`);
+    url.searchParams.set("symbols", symbols.join(","));
+    url.searchParams.set("timeframe", timeframe);
+    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("sort", "asc");
+    if (feed) {
+      url.searchParams.set("feed", feed);
+    }
+    if (start) {
+      url.searchParams.set("start", start);
+    }
+    if (end) {
+      url.searchParams.set("end", end);
+    }
+
+    return this.requestJson(url);
+  }
+
+  async getPositions() {
+    return this.requestJson(`${this.paperBaseUrl}/v2/positions`);
+  }
+
   async listOrders({ status = "open", limit = 20 } = {}) {
     const url = new URL(`${this.paperBaseUrl}/v2/orders`);
     url.searchParams.set("status", status);
@@ -57,6 +91,7 @@ export class AlpacaClient {
 
   async submitOrder(order) {
     validatePaperOrder(order);
+    this.assertPaperEndpoint();
     return this.requestJson(`${this.paperBaseUrl}/v2/orders`, {
       method: "POST",
       body: order
@@ -70,6 +105,12 @@ export class AlpacaClient {
     return this.requestJson(`${this.paperBaseUrl}/v2/orders/${orderId}`, {
       method: "DELETE"
     });
+  }
+
+  assertPaperEndpoint() {
+    if (!this.paperBaseUrl.includes("paper-api.alpaca.markets") && !this.paperBaseUrl.includes("paper.")) {
+      throw new Error(`Refusing to submit orders because Alpaca base URL does not look like paper trading: ${this.paperBaseUrl}`);
+    }
   }
 
   async requestJson(input, { method = "GET", body } = {}) {
@@ -138,6 +179,46 @@ export function createTinyMarketOrder({
     type: "market",
     time_in_force: "day",
     client_order_id: `tb-market-${Date.now()}`
+  };
+}
+
+export function createPaperMarketOrderFromRiskOrder({
+  order,
+  maxBuyNotional = 5
+} = {}) {
+  if (!order) {
+    throw new Error("Risk order is required.");
+  }
+
+  const side = normalizeSide(order.side);
+  const symbol = normalizeSymbol(order.symbol);
+  const clientOrderId = `tb-loop-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+  if (side === "buy") {
+    const requestedNotional = Number(order.quantity || 0) * Number(order.expectedPrice || 0);
+    const notional = Math.min(requestedNotional, Number(maxBuyNotional || 5));
+
+    if (!Number.isFinite(notional) || notional <= 0) {
+      throw new Error("Buy order has invalid notional.");
+    }
+
+    return {
+      symbol,
+      notional: notional.toFixed(2),
+      side,
+      type: "market",
+      time_in_force: "day",
+      client_order_id: clientOrderId
+    };
+  }
+
+  return {
+    symbol,
+    qty: formatQty(order.quantity),
+    side,
+    type: "market",
+    time_in_force: "day",
+    client_order_id: clientOrderId
   };
 }
 
@@ -271,6 +352,14 @@ function normalizeSide(side) {
     throw new Error("Side must be buy or sell.");
   }
   return normalized;
+}
+
+function formatQty(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error("Order quantity must be positive.");
+  }
+  return number.toFixed(6).replace(/\.?0+$/, "");
 }
 
 function money(value) {

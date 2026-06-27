@@ -1,0 +1,339 @@
+import { defaultConfig } from "../config/default.js";
+import { createPaperMarketOrderFromRiskOrder } from "../integrations/alpaca-client.js";
+import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
+import { Portfolio } from "./portfolio.js";
+import { RiskEngine } from "./risk-engine.js";
+
+export async function runAlpacaPaperLoop({
+  client,
+  symbols = ["TSLA", "AAPL"],
+  timeframe = "1Hour",
+  bars = 80,
+  feed = "iex",
+  lookbackDays = 30,
+  submitOrders = false,
+  maxBuyNotional = 5,
+  config = defaultConfig,
+  now = new Date()
+}) {
+  const createdAt = now.toISOString();
+  const start = new Date(now.getTime() - Number(lookbackDays) * 24 * 60 * 60 * 1000).toISOString();
+  const runId = createRunId(createdAt);
+  const normalizedSymbols = normalizeSymbols(symbols);
+
+  const [account, positions, barPayload] = await Promise.all([
+    client.getAccount(),
+    client.getPositions(),
+    client.getStockBars({
+      symbols: normalizedSymbols,
+      timeframe,
+      limit: bars,
+      feed,
+      start,
+      end: createdAt
+    })
+  ]);
+
+  const alpacaBars = normalizeAlpacaBars(barPayload, {
+    feed,
+    timeframe
+  });
+  const barsBySymbol = groupBarsBySymbol(alpacaBars);
+  const portfolio = createPortfolioFromAlpaca(account, positions);
+  const riskEngine = new RiskEngine(config.risk);
+  const strategy = new MomentumBreakoutStrategy(config.strategy.momentumBreakout);
+  const markPrices = new Map();
+  const signals = [];
+  const riskDecisions = [];
+  const orders = [];
+  let barsProcessed = 0;
+
+  for (const symbol of normalizedSymbols) {
+    const symbolBars = barsBySymbol.get(symbol) || [];
+    if (!symbolBars.length) {
+      signals.push(createMissingDataSignal({ symbol, createdAt }));
+      continue;
+    }
+
+    for (const bar of symbolBars.slice(0, -1)) {
+      strategy.onBar({
+        bar,
+        mode: "alpaca-paper-warmup",
+        portfolio,
+        config
+      });
+      barsProcessed += 1;
+    }
+
+    const latestBar = symbolBars.at(-1);
+    markPrices.set(symbol, latestBar.close);
+    barsProcessed += 1;
+
+    const signal = strategy.onBar({
+      bar: latestBar,
+      mode: "alpaca-paper",
+      portfolio,
+      config
+    });
+
+    const signalRecord = {
+      time: latestBar.time,
+      symbol,
+      assetClass: latestBar.assetClass,
+      action: signal.action,
+      confidence: signal.confidence || null,
+      reason: signal.reason || null,
+      features: {
+        close: latestBar.close,
+        high: latestBar.high,
+        low: latestBar.low,
+        volume: latestBar.volume,
+        source: latestBar.source
+      }
+    };
+    signals.push(signalRecord);
+
+    if (!signal || signal.action === "HOLD") {
+      continue;
+    }
+
+    const riskResult = riskEngine.createOrder({
+      bar: latestBar,
+      markPrices,
+      portfolio,
+      signal
+    });
+
+    const riskRecord = {
+      time: latestBar.time,
+      symbol,
+      assetClass: latestBar.assetClass,
+      action: signal.action,
+      approved: riskResult.approved,
+      reason: riskResult.approved ? "approved" : riskResult.reason,
+      order: riskResult.order || null,
+      signal: signalRecord
+    };
+    riskDecisions.push(riskRecord);
+
+    if (!riskResult.approved) {
+      continue;
+    }
+
+    const request = createPaperMarketOrderFromRiskOrder({
+      order: riskResult.order,
+      maxBuyNotional
+    });
+
+    if (!submitOrders) {
+      orders.push({
+        status: "planned",
+        assetClass: latestBar.assetClass,
+        request,
+        riskOrder: riskResult.order
+      });
+      continue;
+    }
+
+    const submitted = await client.submitOrder(request);
+    orders.push({
+      status: submitted.status || "submitted",
+      assetClass: latestBar.assetClass,
+      request,
+      submitted,
+      riskOrder: riskResult.order
+    });
+  }
+
+  return {
+    runId,
+    createdAt,
+    mode: "alpaca-paper",
+    symbols: normalizedSymbols,
+    timeframe,
+    feed,
+    lookbackDays,
+    submitted: submitOrders,
+    maxBuyNotional,
+    account: normalizeAccount(account),
+    rawAccount: account,
+    positions: positions.map(normalizeAlpacaPosition),
+    barsProcessed,
+    signals,
+    riskDecisions,
+    orders,
+    summary: {
+      signals: signals.length,
+      actionableSignals: signals.filter((signal) => signal.action !== "HOLD").length,
+      approvedRiskDecisions: riskDecisions.filter((decision) => decision.approved).length,
+      rejectedRiskDecisions: riskDecisions.filter((decision) => !decision.approved).length,
+      orders: orders.length,
+      submittedOrders: orders.filter((order) => order.status !== "planned").length
+    }
+  };
+}
+
+export function formatAlpacaPaperLoop(run) {
+  const lines = [];
+  lines.push("Alpaca Live-Paper Strategy Loop");
+  lines.push("===============================");
+  lines.push(`Run ID:        ${run.runId}`);
+  lines.push(`Mode:          ${run.submitted ? "submitted paper orders" : "decision/log only"}`);
+  lines.push(`Symbols:       ${run.symbols.join(", ")}`);
+  lines.push(`Timeframe:     ${run.timeframe}`);
+  lines.push(`Feed:          ${run.feed}`);
+  lines.push(`Lookback days: ${run.lookbackDays}`);
+  lines.push(`Bars:          ${run.barsProcessed}`);
+  lines.push(`Buying Power:  ${money(run.account.buyingPower)}`);
+  lines.push(`Equity:        ${money(run.account.portfolioValue)}`);
+  lines.push(`Signals:       ${run.summary.signals}`);
+  lines.push(`Actionable:    ${run.summary.actionableSignals}`);
+  lines.push(`Risk approved: ${run.summary.approvedRiskDecisions}`);
+  lines.push(`Risk rejected: ${run.summary.rejectedRiskDecisions}`);
+  lines.push(`Orders:        ${run.summary.orders}`);
+
+  if (run.signals.length) {
+    lines.push("");
+    lines.push("Latest Signals");
+    for (const signal of run.signals) {
+      lines.push(
+        `  ${signal.time} ${signal.symbol.padEnd(6)} ${signal.action.padEnd(4)} ${signal.reason || ""}`
+      );
+    }
+  }
+
+  if (run.riskDecisions.length) {
+    lines.push("");
+    lines.push("Risk Decisions");
+    for (const decision of run.riskDecisions) {
+      lines.push(
+        `  ${decision.symbol.padEnd(6)} ${decision.action.padEnd(4)} ${decision.approved ? "APPROVED" : "BLOCKED"} ${decision.reason || ""}`
+      );
+    }
+  }
+
+  if (run.orders.length) {
+    lines.push("");
+    lines.push("Paper Orders");
+    for (const order of run.orders) {
+      const request = order.request || {};
+      lines.push(
+        `  ${String(request.symbol || "?").padEnd(6)} ${String(request.side || "?").padEnd(4)} ${order.status.padEnd(12)} notional=${request.notional || "n/a"} qty=${request.qty || "n/a"}`
+      );
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function normalizeAlpacaBars(payload, { feed, timeframe } = {}) {
+  const barsBySymbol = payload.bars || {};
+  const bars = [];
+
+  for (const [symbol, symbolBars] of Object.entries(barsBySymbol)) {
+    for (const bar of symbolBars || []) {
+      const close = Number(bar.c);
+      bars.push({
+        time: new Date(bar.t).toISOString(),
+        symbol,
+        assetClass: "stock",
+        venue: "alpaca-paper",
+        open: Number(bar.o),
+        high: Number(bar.h),
+        low: Number(bar.l),
+        close,
+        volume: Number(bar.v || 0),
+        bid: close,
+        ask: close,
+        source: {
+          provider: "alpaca",
+          mode: "paper-market-data",
+          feed,
+          timeframe
+        }
+      });
+    }
+  }
+
+  return bars.sort((a, b) => Date.parse(a.time) - Date.parse(b.time) || a.symbol.localeCompare(b.symbol));
+}
+
+export function createPortfolioFromAlpaca(account, positions = []) {
+  return new Portfolio({
+    startingCash: Number(account.portfolio_value || account.cash || 0),
+    cash: Number(account.cash || 0),
+    positions: positions.map(normalizeAlpacaPosition)
+  });
+}
+
+function normalizeAlpacaPosition(position) {
+  return {
+    symbol: position.symbol,
+    assetClass: mapAlpacaAssetClass(position.asset_class),
+    quantity: Math.abs(Number(position.qty || 0)),
+    avgPrice: Number(position.avg_entry_price || 0),
+    marketValue: Number(position.market_value || 0),
+    raw: position
+  };
+}
+
+function normalizeAccount(account) {
+  return {
+    id: account.id,
+    status: account.status,
+    cash: Number(account.cash || 0),
+    buyingPower: Number(account.buying_power || 0),
+    portfolioValue: Number(account.portfolio_value || 0),
+    patternDayTrader: Boolean(account.pattern_day_trader)
+  };
+}
+
+function createMissingDataSignal({ symbol, createdAt }) {
+  return {
+    time: createdAt,
+    symbol,
+    assetClass: "stock",
+    action: "HOLD",
+    confidence: null,
+    reason: "no Alpaca bars returned",
+    features: {}
+  };
+}
+
+function groupBarsBySymbol(bars) {
+  const grouped = new Map();
+
+  for (const bar of bars) {
+    if (!grouped.has(bar.symbol)) {
+      grouped.set(bar.symbol, []);
+    }
+    grouped.get(bar.symbol).push(bar);
+  }
+
+  return grouped;
+}
+
+function normalizeSymbols(symbols) {
+  return String(Array.isArray(symbols) ? symbols.join(",") : symbols)
+    .split(",")
+    .map((symbol) => symbol.trim().toUpperCase())
+    .filter(Boolean);
+}
+
+function mapAlpacaAssetClass(assetClass) {
+  if (assetClass === "us_equity") {
+    return "stock";
+  }
+  return assetClass || "stock";
+}
+
+function createRunId(createdAt) {
+  return `${createdAt.replace(/[:.]/g, "-")}-alpaca-paper`;
+}
+
+function money(value) {
+  return `$${Number(value || 0).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2
+  })}`;
+}

@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   AlpacaClient,
+  createPaperMarketOrderFromRiskOrder,
   createLimitCancelSmokeOrder,
   createTinyMarketOrder,
   formatAlpacaAccount,
@@ -82,6 +83,49 @@ test("AlpacaClient fetches latest bars from data API", async () => {
   assert.match(capturedUrl, /feed=iex/);
 });
 
+test("AlpacaClient fetches historical stock bars and positions", async () => {
+  const calls = [];
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret",
+      ALPACA_BASE_URL: "https://paper.example.test",
+      ALPACA_DATA_BASE_URL: "https://data.example.test"
+    },
+    fetchFn: async (url) => {
+      calls.push(String(url));
+      if (String(url).includes("/positions")) {
+        return jsonResponse([{ symbol: "TSLA", qty: "1" }]);
+      }
+      return jsonResponse({
+        bars: {
+          TSLA: [{
+            o: 249,
+            h: 252,
+            l: 248,
+            c: 250,
+            v: 1000,
+            t: "2026-01-01T00:00:00Z"
+          }]
+        }
+      });
+    }
+  });
+
+  const bars = await client.getStockBars({
+    symbols: ["TSLA"],
+    timeframe: "1Hour",
+    limit: 80,
+    feed: "iex"
+  });
+  const positions = await client.getPositions();
+
+  assert.equal(bars.bars.TSLA.length, 1);
+  assert.equal(positions[0].symbol, "TSLA");
+  assert.match(calls[0], /timeframe=1Hour/);
+  assert.match(calls[0], /limit=80/);
+});
+
 test("AlpacaClient submits and cancels paper orders", async () => {
   const calls = [];
   const client = new AlpacaClient({
@@ -134,18 +178,45 @@ test("tiny market order builder caps accidental large notional orders", async ()
     fetchFn: async () => jsonResponse({})
   });
 
-  assert.deepEqual(createTinyMarketOrder({ symbol: "tsla", notional: "1" }), {
-    symbol: "TSLA",
-    notional: "1",
-    side: "buy",
-    type: "market",
-    time_in_force: "day",
-    client_order_id: createTinyMarketOrder({}).client_order_id
-  });
+  const order = createTinyMarketOrder({ symbol: "tsla", notional: "1" });
+
+  assert.equal(order.symbol, "TSLA");
+  assert.equal(order.notional, "1");
+  assert.equal(order.side, "buy");
+  assert.equal(order.type, "market");
+  assert.equal(order.time_in_force, "day");
+  assert.match(order.client_order_id, /^tb-market-/);
   await assert.rejects(
     () => client.submitOrder(createTinyMarketOrder({ notional: "6" })),
     /capped at \$5/
   );
+});
+
+test("risk orders convert to capped Alpaca paper market orders", () => {
+  const buy = createPaperMarketOrderFromRiskOrder({
+    order: {
+      symbol: "tsla",
+      side: "BUY",
+      quantity: 10,
+      expectedPrice: 250
+    },
+    maxBuyNotional: 5
+  });
+
+  assert.equal(buy.symbol, "TSLA");
+  assert.equal(buy.side, "buy");
+  assert.equal(buy.notional, "5.00");
+  assert.match(buy.client_order_id, /^tb-loop-/);
+
+  assert.deepEqual(createPaperMarketOrderFromRiskOrder({
+    order: {
+      symbol: "TSLA",
+      side: "SELL",
+      quantity: 1.25,
+      expectedPrice: 250
+    },
+    maxBuyNotional: 5
+  }).qty, "1.25");
 });
 
 test("Alpaca formatters do not reveal credentials", () => {

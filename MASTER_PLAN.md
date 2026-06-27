@@ -21,6 +21,7 @@ This bot must be testable, source-transparent, and paper-first. No hidden feeds,
    - Purpose: submit, cancel, and track simulated stock orders.
    - Docs: https://docs.alpaca.markets/us/docs/paper-trading
    - Order endpoint: https://docs.alpaca.markets/us/reference/postorder
+   - Current paper loop: `node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db`
 
 2. Alpaca market data
    - Purpose: current stock bars using the free Basic IEX feed.
@@ -152,8 +153,8 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Alpaca live-paper strategy loop.
-2. Persist Alpaca account snapshots and broker orders.
+1. Run repeated Alpaca paper-loop sessions and review stored decisions.
+2. Persist filled order updates from Alpaca.
 3. Dashboard.
 4. Dashboard.
 5. Coinbase crypto data adapter.

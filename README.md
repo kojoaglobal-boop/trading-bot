@@ -24,6 +24,7 @@ node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
+node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 node src/cli.js alpaca smoke-order --confirm-paper
 node --test
 ```
@@ -43,6 +44,7 @@ npm run alpaca:account
 npm run alpaca:bars
 npm run alpaca:orders
 npm run alpaca:smoke-order
+npm run alpaca:paper-loop
 npm test
 ```
 
@@ -113,6 +115,18 @@ To place a tiny simulated market order later:
 
 ```powershell
 node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
+```
+
+Run one live-paper strategy cycle using Alpaca historical/current bars, risk checks, and Postgres logging:
+
+```powershell
+node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+```
+
+To let that loop submit paper orders, add the explicit paper confirmation. Buy orders are capped to a small notional by default:
+
+```powershell
+node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper
 ```
 
 For audit output:
@@ -232,7 +246,7 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Add real Alpaca paper strategy loop.
-3. Persist Alpaca account snapshots and orders.
+2. Run repeated Alpaca paper-loop sessions and review stored decisions.
+3. Persist filled order updates from Alpaca.
 4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
 5. Add broker adapters one at a time, starting with paper/sandbox endpoints.

@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS fills (
 
 CREATE TABLE IF NOT EXISTS account_snapshots (
   id BIGSERIAL PRIMARY KEY,
+  run_id TEXT REFERENCES bot_runs(run_id) ON DELETE SET NULL,
   source TEXT NOT NULL,
   snapshot_time TIMESTAMPTZ NOT NULL,
   cash NUMERIC(18, 6),
@@ -104,6 +105,9 @@ CREATE TABLE IF NOT EXISTS account_snapshots (
   raw JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE account_snapshots
+  ADD COLUMN IF NOT EXISTS run_id TEXT REFERENCES bot_runs(run_id) ON DELETE SET NULL;
 
 CREATE INDEX IF NOT EXISTS idx_market_bars_symbol_time
   ON market_bars (symbol, bar_time DESC);
@@ -116,3 +120,6 @@ CREATE INDEX IF NOT EXISTS idx_risk_decisions_run_time
 
 CREATE INDEX IF NOT EXISTS idx_broker_orders_status
   ON broker_orders (broker, status, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_account_snapshots_run_time
+  ON account_snapshots (run_id, snapshot_time DESC);
