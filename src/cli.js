@@ -17,6 +17,7 @@ import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-l
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { upsertMarketBars } from "./core/database-market-data.js";
+import { formatDataQualityCheck, runStoredDataQualityCheck, writeDataQualityCheck } from "./core/data-quality.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -289,11 +290,32 @@ async function runCryptoCommand(args) {
     return;
   }
 
+  if (subcommand === "quality") {
+    const check = await runStoredDataQualityCheck({
+      symbol: String(args.symbol || "BTC/USD").toUpperCase(),
+      primarySource: String(args.primary || "coinbase").toLowerCase(),
+      secondarySource: String(args.secondary || "kraken").toLowerCase(),
+      maxCloseDiffBps: Number(args.maxCloseDiffBps || args["max-close-diff-bps"] || 35),
+      warnCloseDiffBps: Number(args.warnCloseDiffBps || args["warn-close-diff-bps"] || 15),
+      maxTimeDiffSeconds: Number(args.maxTimeDiffSeconds || args["max-time-diff-seconds"] || 3900),
+      maxStaleSeconds: Number(args.maxStaleSeconds || args["max-stale-seconds"] || 7200)
+    });
+
+    console.log(formatDataQualityCheck(check));
+
+    if (args.db) {
+      const stored = await writeDataQualityCheck(check);
+      console.log(`Database data-quality check: ${stored.symbol} ${stored.status} (${stored.reasons} reasons)`);
+    }
+    return;
+  }
+
   console.log(`Crypto Commands
 ===============
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto bars --provider coinbase --product PEPE-USD --db
   node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
+  node src/cli.js crypto quality --symbol BTC/USD --db
 `);
 }
 
@@ -395,6 +417,7 @@ Usage:
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
   node src/cli.js alpaca sync
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
+  node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources

@@ -130,6 +130,23 @@ CREATE TABLE IF NOT EXISTS account_positions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS data_quality_checks (
+  id BIGSERIAL PRIMARY KEY,
+  check_time TIMESTAMPTZ NOT NULL DEFAULT now(),
+  symbol TEXT NOT NULL,
+  primary_source TEXT NOT NULL,
+  secondary_source TEXT NOT NULL,
+  primary_bar_time TIMESTAMPTZ,
+  secondary_bar_time TIMESTAMPTZ,
+  primary_close NUMERIC(18, 8),
+  secondary_close NUMERIC(18, 8),
+  close_diff_bps NUMERIC(12, 6),
+  time_diff_seconds INTEGER,
+  status TEXT NOT NULL,
+  reasons JSONB NOT NULL DEFAULT '[]'::jsonb,
+  raw JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
 CREATE INDEX IF NOT EXISTS idx_market_bars_symbol_time
   ON market_bars (symbol, bar_time DESC);
 
@@ -155,3 +172,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_orders_unique_broker_order
 CREATE UNIQUE INDEX IF NOT EXISTS idx_fills_unique_broker_fill
   ON fills (broker_fill_id)
   WHERE broker_fill_id IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_data_quality_symbol_time
+  ON data_quality_checks (symbol, check_time DESC);

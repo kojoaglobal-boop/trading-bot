@@ -52,6 +52,7 @@ npm run alpaca:smoke-order
 npm run alpaca:paper-loop
 npm run crypto:coinbase
 npm run crypto:kraken
+npm run crypto:quality
 npm test
 ```
 
@@ -149,9 +150,11 @@ Pull crypto/meme coin bars through our own normalized data layer:
 ```powershell
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
+node src/cli.js crypto quality --symbol BTC/USD --db
 ```
 
 Coinbase is the primary crypto source. Kraken is the independent fallback/check.
+The quality command compares the latest stored bars and flags stale data, timestamp mismatch, or abnormal price disagreement.
 
 For audit output:
 
@@ -270,6 +273,6 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Use Coinbase/Kraken crypto bars in the strategy engine.
+2. Use quality-approved Coinbase/Kraken crypto bars in the strategy engine.
 3. Run repeated Alpaca paper-loop sessions and sync after each session.
 4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.

@@ -23,6 +23,7 @@
     "alpaca:paper-loop": "node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db",
     "crypto:coinbase": "node src/cli.js crypto bars --provider coinbase --product BTC-USD --db",
     "crypto:kraken": "node src/cli.js crypto bars --provider kraken --pair BTC/USD --db",
+    "crypto:quality": "node src/cli.js crypto quality --symbol BTC/USD --db",
     "db": "node src/cli.js db",
     "db:up": "docker compose up -d db",
     "db:status": "docker compose ps",
