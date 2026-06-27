@@ -6,9 +6,11 @@ import {
   createLimitCancelSmokeOrder,
   createTinyMarketOrder,
   formatAlpacaAccount,
+  formatActivities,
   formatLatestBars,
   formatOrder,
   formatOrders,
+  formatPositions,
   formatSmokeOrderResult
 } from "../src/integrations/alpaca-client.js";
 
@@ -124,6 +126,58 @@ test("AlpacaClient fetches historical stock bars and positions", async () => {
   assert.equal(positions[0].symbol, "TSLA");
   assert.match(calls[0], /timeframe=1Hour/);
   assert.match(calls[0], /limit=80/);
+});
+
+test("AlpacaClient fetches orders with filters and fill activities", async () => {
+  const calls = [];
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret",
+      ALPACA_BASE_URL: "https://paper.example.test"
+    },
+    fetchFn: async (url) => {
+      calls.push(String(url));
+      if (String(url).includes("/activities/FILL")) {
+        return jsonResponse([{
+          id: "fill-1",
+          symbol: "AAPL",
+          qty: "1",
+          price: "100",
+          side: "buy"
+        }]);
+      }
+      return jsonResponse([{
+        id: "order-1",
+        symbol: "AAPL",
+        status: "filled"
+      }]);
+    }
+  });
+
+  const orders = await client.listOrders({
+    status: "all",
+    limit: 50,
+    after: "2026-01-01T00:00:00Z",
+    until: "2026-01-02T00:00:00Z",
+    direction: "desc",
+    symbols: ["AAPL"],
+    nested: true
+  });
+  const fills = await client.getAccountActivities({
+    activityType: "FILL",
+    after: "2026-01-01T00:00:00Z",
+    until: "2026-01-02T00:00:00Z",
+    pageSize: 50
+  });
+
+  assert.equal(orders[0].id, "order-1");
+  assert.equal(fills[0].id, "fill-1");
+  assert.match(calls[0], /status=all/);
+  assert.match(calls[0], /symbols=AAPL/);
+  assert.match(calls[0], /nested=true/);
+  assert.match(calls[1], /activities\/FILL/);
+  assert.match(calls[1], /page_size=50/);
 });
 
 test("AlpacaClient submits and cancels paper orders", async () => {
@@ -266,6 +320,31 @@ test("Alpaca formatters do not reveal credentials", () => {
       }
     ]),
     /canceled/
+  );
+  assert.match(
+    formatPositions([
+      {
+        symbol: "AAPL",
+        qty: "1",
+        avg_entry_price: "100",
+        market_value: "101",
+        unrealized_pl: "1"
+      }
+    ]),
+    /AAPL/
+  );
+  assert.match(
+    formatActivities([
+      {
+        symbol: "AAPL",
+        side: "buy",
+        qty: "1",
+        price: "100",
+        order_id: "order-1",
+        transaction_time: "2026-01-01T00:00:00Z"
+      }
+    ], { title: "Alpaca Fill Activities" }),
+    /order-1/
   );
   assert.match(
     formatSmokeOrderResult({

@@ -14,6 +14,7 @@ import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.
 import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journal.js";
 import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
+import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -26,9 +27,11 @@ import {
   createLimitCancelSmokeOrder,
   createTinyMarketOrder,
   formatAlpacaAccount,
+  formatActivities,
   formatLatestBars,
   formatOrder,
   formatOrders,
+  formatPositions,
   formatSmokeOrderResult
 } from "./integrations/alpaca-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
@@ -140,9 +143,30 @@ async function runAlpacaCommand(args) {
   if (subcommand === "orders") {
     const orders = await client.listOrders({
       status: String(args.status || "open"),
-      limit: Number(args.limit || 20)
+      limit: Number(args.limit || 20),
+      direction: String(args.direction || "desc")
     });
     console.log(formatOrders(orders));
+    return;
+  }
+
+  if (subcommand === "positions") {
+    const positions = await client.getPositions();
+    console.log(formatPositions(positions));
+    return;
+  }
+
+  if (subcommand === "fills") {
+    const now = new Date();
+    const activityDays = Number(args.days || args.activityDays || args["activity-days"] || 7);
+    const fills = await client.getAccountActivities({
+      activityType: "FILL",
+      after: new Date(now.getTime() - activityDays * 24 * 60 * 60 * 1000).toISOString(),
+      until: now.toISOString(),
+      direction: String(args.direction || "desc"),
+      pageSize: Number(args.limit || 50)
+    });
+    console.log(formatActivities(fills, { title: "Alpaca Fill Activities" }));
     return;
   }
 
@@ -210,11 +234,27 @@ async function runAlpacaCommand(args) {
     return;
   }
 
+  if (subcommand === "sync") {
+    const sync = await syncAlpacaPaperState({
+      client,
+      status: String(args.status || "all"),
+      limit: Number(args.limit || 100),
+      activityDays: Number(args.days || args.activityDays || args["activity-days"] || 7)
+    });
+    const result = await writeAlpacaSyncToDatabase(sync);
+    console.log(formatAlpacaSync(sync));
+    console.log(`Database sync: ${result.runId} (${result.positions} positions, ${result.orders} orders, ${result.fills} fills)`);
+    return;
+  }
+
   console.log(`Alpaca Commands
 ===============
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL --feed iex
   node src/cli.js alpaca orders
+  node src/cli.js alpaca positions
+  node src/cli.js alpaca fills
+  node src/cli.js alpaca sync
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
@@ -318,6 +358,7 @@ Usage:
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+  node src/cli.js alpaca sync
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js doctor
   node src/cli.js sources

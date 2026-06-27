@@ -25,6 +25,7 @@ node src/cli.js db
 node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+node src/cli.js alpaca sync
 node src/cli.js alpaca smoke-order --confirm-paper
 node --test
 ```
@@ -43,6 +44,9 @@ npm run db
 npm run alpaca:account
 npm run alpaca:bars
 npm run alpaca:orders
+npm run alpaca:positions
+npm run alpaca:fills
+npm run alpaca:sync
 npm run alpaca:smoke-order
 npm run alpaca:paper-loop
 npm test
@@ -128,6 +132,14 @@ To let that loop submit paper orders, add the explicit paper confirmation. Buy o
 ```powershell
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper
 ```
+
+Sync the Alpaca paper broker state into Postgres:
+
+```powershell
+node src/cli.js alpaca sync
+```
+
+That stores the latest account snapshot, open positions, recent orders, and recent fill activities.
 
 For audit output:
 
@@ -246,7 +258,6 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 ## Next Build Steps
 
 1. Add real market data ingestion for one venue first.
-2. Run repeated Alpaca paper-loop sessions and review stored decisions.
-3. Persist filled order updates from Alpaca.
-4. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
-5. Add broker adapters one at a time, starting with paper/sandbox endpoints.
+2. Run repeated Alpaca paper-loop sessions and sync after each session.
+3. Add a dashboard for current equity, open positions, blocked trades, and recent decisions.
+4. Add broker adapters one at a time, starting with paper/sandbox endpoints.

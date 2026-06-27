@@ -75,10 +75,57 @@ export class AlpacaClient {
     return this.requestJson(`${this.paperBaseUrl}/v2/positions`);
   }
 
-  async listOrders({ status = "open", limit = 20 } = {}) {
+  async listOrders({
+    status = "open",
+    limit = 20,
+    after,
+    until,
+    direction,
+    symbols,
+    nested
+  } = {}) {
     const url = new URL(`${this.paperBaseUrl}/v2/orders`);
     url.searchParams.set("status", status);
     url.searchParams.set("limit", String(limit));
+    if (after) {
+      url.searchParams.set("after", after);
+    }
+    if (until) {
+      url.searchParams.set("until", until);
+    }
+    if (direction) {
+      url.searchParams.set("direction", direction);
+    }
+    if (symbols) {
+      url.searchParams.set("symbols", Array.isArray(symbols) ? symbols.join(",") : String(symbols));
+    }
+    if (nested !== undefined) {
+      url.searchParams.set("nested", String(Boolean(nested)));
+    }
+    return this.requestJson(url);
+  }
+
+  async getAccountActivities({
+    activityType = "FILL",
+    after,
+    until,
+    date,
+    direction = "desc",
+    pageSize = 100
+  } = {}) {
+    const safeActivityType = String(activityType || "FILL").trim().toUpperCase();
+    const url = new URL(`${this.paperBaseUrl}/v2/account/activities/${safeActivityType}`);
+    url.searchParams.set("direction", direction);
+    url.searchParams.set("page_size", String(pageSize));
+    if (after) {
+      url.searchParams.set("after", after);
+    }
+    if (until) {
+      url.searchParams.set("until", until);
+    }
+    if (date) {
+      url.searchParams.set("date", date);
+    }
     return this.requestJson(url);
   }
 
@@ -253,6 +300,44 @@ export function formatOrders(orders) {
   for (const order of orders) {
     lines.push(
       `${String(order.symbol || "unknown").padEnd(6)} ${String(order.side || "?").padEnd(4)} ${String(order.type || "?").padEnd(6)} ${String(order.status || "?").padEnd(12)} id=${order.id || "unknown"}`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatPositions(positions) {
+  const lines = [];
+  lines.push("Alpaca Paper Positions");
+  lines.push("======================");
+
+  if (!positions.length) {
+    lines.push("No open positions.");
+    return lines.join("\n");
+  }
+
+  for (const position of positions) {
+    lines.push(
+      `${String(position.symbol || "unknown").padEnd(6)} qty=${position.qty || "0"} avg=${money(position.avg_entry_price)} value=${money(position.market_value)} upl=${money(position.unrealized_pl)}`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatActivities(activities, { title = "Alpaca Account Activities" } = {}) {
+  const lines = [];
+  lines.push(title);
+  lines.push("=".repeat(title.length));
+
+  if (!activities.length) {
+    lines.push("No activities returned.");
+    return lines.join("\n");
+  }
+
+  for (const activity of activities) {
+    lines.push(
+      `${String(activity.transaction_time || activity.date || "unknown").padEnd(28)} ${String(activity.symbol || "?").padEnd(6)} ${String(activity.side || "?").padEnd(4)} qty=${activity.qty || "0"} price=${money(activity.price)} order=${activity.order_id || "unknown"}`
     );
   }
 

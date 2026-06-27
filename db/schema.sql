@@ -72,12 +72,18 @@ CREATE TABLE IF NOT EXISTS broker_orders (
   qty NUMERIC(24, 8),
   notional NUMERIC(18, 6),
   limit_price NUMERIC(18, 8),
+  filled_qty NUMERIC(24, 8),
+  filled_avg_price NUMERIC(18, 8),
   status TEXT NOT NULL,
   submitted_at TIMESTAMPTZ,
   updated_at TIMESTAMPTZ,
   raw JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE broker_orders
+  ADD COLUMN IF NOT EXISTS filled_qty NUMERIC(24, 8),
+  ADD COLUMN IF NOT EXISTS filled_avg_price NUMERIC(18, 8);
 
 CREATE TABLE IF NOT EXISTS fills (
   id BIGSERIAL PRIMARY KEY,
@@ -109,6 +115,21 @@ CREATE TABLE IF NOT EXISTS account_snapshots (
 ALTER TABLE account_snapshots
   ADD COLUMN IF NOT EXISTS run_id TEXT REFERENCES bot_runs(run_id) ON DELETE SET NULL;
 
+CREATE TABLE IF NOT EXISTS account_positions (
+  id BIGSERIAL PRIMARY KEY,
+  run_id TEXT REFERENCES bot_runs(run_id) ON DELETE SET NULL,
+  source TEXT NOT NULL,
+  snapshot_time TIMESTAMPTZ NOT NULL,
+  symbol TEXT NOT NULL,
+  asset_class TEXT NOT NULL,
+  qty NUMERIC(24, 8) NOT NULL,
+  avg_entry_price NUMERIC(18, 8),
+  market_value NUMERIC(18, 6),
+  unrealized_pl NUMERIC(18, 6),
+  raw JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_market_bars_symbol_time
   ON market_bars (symbol, bar_time DESC);
 
@@ -123,3 +144,14 @@ CREATE INDEX IF NOT EXISTS idx_broker_orders_status
 
 CREATE INDEX IF NOT EXISTS idx_account_snapshots_run_time
   ON account_snapshots (run_id, snapshot_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_account_positions_run_symbol
+  ON account_positions (run_id, symbol);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_orders_unique_broker_order
+  ON broker_orders (broker, broker_order_id)
+  WHERE broker_order_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_fills_unique_broker_fill
+  ON fills (broker_fill_id)
+  WHERE broker_fill_id IS NOT NULL;
