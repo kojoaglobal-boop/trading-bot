@@ -159,13 +159,12 @@ Do not install yet:
 
 ## Immediate Build Goals
 
-1. Require data-quality pass before strategy runs consume stored crypto bars.
-2. Run repeated Alpaca paper-loop sessions and sync after each session.
-3. Scheduler.
-4. Dashboard.
-5. OANDA demo adapter.
-6. Strategy ensemble and scoring.
-7. AI research/journal layer.
+1. Run repeated Alpaca paper-loop sessions and sync after each session.
+2. Scheduler.
+3. Dashboard.
+4. OANDA demo adapter.
+5. Strategy ensemble and scoring.
+6. AI research/journal layer.
 
 ## Completed Final-System Blocks
 
@@ -174,5 +173,6 @@ Do not install yet:
 - Alpaca paper account connection, guarded paper-order smoke test, paper loop, and broker sync.
 - Coinbase and Kraken public crypto data ingestion into normalized market bars.
 - Coinbase/Kraken stored-data quality gate.
+- Stored crypto backtests require a fresh `PASS` quality gate before strategy execution.
 - Real-data backtesting from Postgres bars.
 - Expectancy, payoff ratio, average win/loss, profit factor, drawdown, and win-rate reporting.

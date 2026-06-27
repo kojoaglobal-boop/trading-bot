@@ -168,6 +168,8 @@ Backtest directly from stored real-market bars:
 node src/cli.js backtest --db-source coinbase --db-symbols BTC/USD --db-limit 120 --db
 ```
 
+For Coinbase/Kraken stored crypto bars, this command requires a fresh `PASS` data-quality check before the strategy runs.
+
 For audit output:
 
 ```powershell
@@ -284,8 +286,8 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 
 ## Next Required Build Blocks
 
-1. Require data-quality pass before strategy runs consume stored crypto bars.
-2. Run repeated Alpaca paper-loop sessions and sync after each session.
-3. Add the scheduler for data pulls, quality checks, paper loops, and broker sync.
-4. Add the dashboard for equity, open positions, blocked trades, source health, and recent decisions.
-5. Add OANDA demo forex/XAU data and execution.
+1. Run repeated Alpaca paper-loop sessions and sync after each session.
+2. Add the scheduler for data pulls, quality checks, paper loops, and broker sync.
+3. Add the dashboard for equity, open positions, blocked trades, source health, and recent decisions.
+4. Add OANDA demo forex/XAU data and execution.
+5. Add strategy ensemble scoring across momentum, breakout, and mean-reversion candidates.

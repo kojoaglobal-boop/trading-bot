@@ -17,7 +17,12 @@ import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-l
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
-import { formatDataQualityCheck, runStoredDataQualityCheck, writeDataQualityCheck } from "./core/data-quality.js";
+import {
+  formatDataQualityCheck,
+  requireStoredDataQualityPass,
+  runStoredDataQualityCheck,
+  writeDataQualityCheck
+} from "./core/data-quality.js";
 import {
   formatSweepResult,
   formatWalkForwardResult,
@@ -331,8 +336,9 @@ async function loadBarsFromArgs(args, { defaultBars, seed }) {
   if (dbSource) {
     const symbols = parseList(args.dbSymbols || args["db-symbols"]);
     const mode = String(args.dbMode || args["db-mode"] || "public-market-data");
+    const source = String(dbSource).toLowerCase();
     const bars = await loadMarketBars({
-      source: String(dbSource).toLowerCase(),
+      source,
       mode,
       symbols,
       limit: Number(args.dbLimit || args["db-limit"] || defaultBars)
@@ -341,6 +347,12 @@ async function loadBarsFromArgs(args, { defaultBars, seed }) {
     if (!bars.length) {
       throw new Error(`No database bars found for source=${dbSource} mode=${mode}${symbols.length ? ` symbols=${symbols.join(",")}` : ""}.`);
     }
+
+    await requireQualityForStoredBars({
+      source,
+      mode,
+      symbols: symbols.length ? symbols : [...new Set(bars.map((bar) => bar.symbol))]
+    });
 
     return bars;
   }
@@ -357,6 +369,18 @@ function parseList(value) {
     .split(",")
     .map((item) => item.trim().toUpperCase())
     .filter(Boolean);
+}
+
+async function requireQualityForStoredBars({ source, mode, symbols }) {
+  if (mode !== "public-market-data" || !["coinbase", "kraken"].includes(source)) {
+    return [];
+  }
+
+  return Promise.all(symbols.map((symbol) => requireStoredDataQualityPass({
+    symbol,
+    primarySource: "coinbase",
+    secondarySource: "kraken"
+  })));
 }
 
 function runSimulation(bars, mode, strategyOverrides = {}) {
@@ -431,6 +455,7 @@ Usage:
   node src/cli.js backtest --sample
   node src/cli.js backtest --csv ./data/bars.csv
   node src/cli.js backtest --db-source coinbase --db-symbols BTC/USD --db-limit 120
+  node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js optimize --sample
   node src/cli.js walk-forward --sample
   node src/cli.js paper --ticks 200 --audit --db

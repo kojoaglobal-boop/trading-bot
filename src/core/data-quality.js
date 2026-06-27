@@ -73,16 +73,17 @@ export function compareLatestBars({
   };
 }
 
-export async function runStoredDataQualityCheck({
-  symbol = "BTC/USD",
-  primarySource = "coinbase",
-  secondarySource = "kraken",
-  mode = "public-market-data",
-  limit = 5,
-  pool = createDatabasePool(),
-  ...thresholds
-} = {}) {
-  const shouldClosePool = !arguments[0]?.pool;
+export async function runStoredDataQualityCheck(options = {}) {
+  const {
+    symbol = "BTC/USD",
+    primarySource = "coinbase",
+    secondarySource = "kraken",
+    mode = "public-market-data",
+    limit = 5,
+    pool = createDatabasePool(),
+    ...thresholds
+  } = options;
+  const shouldClosePool = !options.pool;
   try {
     const [primaryBars, secondaryBars] = await Promise.all([
       loadRecentMarketBars({
@@ -114,6 +115,77 @@ export async function runStoredDataQualityCheck({
       await pool.end();
     }
   }
+}
+
+export async function loadLatestDataQualityCheck(options = {}) {
+  const {
+    symbol = "BTC/USD",
+    primarySource = "coinbase",
+    secondarySource = "kraken",
+    pool = createDatabasePool()
+  } = options;
+  const shouldClosePool = !options.pool;
+
+  try {
+    return await withDatabaseClient(async (client) => {
+      const result = await client.query(
+        `SELECT
+          check_time,
+          symbol,
+          primary_source,
+          secondary_source,
+          primary_bar_time,
+          secondary_bar_time,
+          primary_close,
+          secondary_close,
+          close_diff_bps,
+          time_diff_seconds,
+          status,
+          reasons,
+          raw
+        FROM data_quality_checks
+        WHERE symbol = $1
+          AND primary_source = $2
+          AND secondary_source = $3
+        ORDER BY check_time DESC
+        LIMIT 1`,
+        [symbol, primarySource, secondarySource]
+      );
+
+      return result.rows[0] ? rowToDataQualityCheck(result.rows[0]) : null;
+    }, { pool });
+  } finally {
+    if (shouldClosePool && pool.end) {
+      await pool.end();
+    }
+  }
+}
+
+export async function requireStoredDataQualityPass(options = {}) {
+  const {
+    symbol = "BTC/USD",
+    primarySource = "coinbase",
+    secondarySource = "kraken",
+    maxAgeSeconds = 7200,
+    now = new Date()
+  } = options;
+  const check = await loadLatestDataQualityCheck(options);
+
+  if (!check) {
+    throw new Error(`No stored data-quality check found for ${symbol} (${primarySource}/${secondarySource}). Run: node src/cli.js crypto quality --symbol ${symbol} --db`);
+  }
+
+  if (check.status !== "pass") {
+    const reasons = check.reasons.length ? `: ${check.reasons.join("; ")}` : "";
+    throw new Error(`Latest data-quality check for ${symbol} is ${check.status.toUpperCase()}${reasons}.`);
+  }
+
+  const ageSeconds = (now.getTime() - Date.parse(check.checkedAt)) / 1000;
+  if (ageSeconds > maxAgeSeconds) {
+    throw new Error(`Latest data-quality check for ${symbol} is stale by ${Math.round(ageSeconds)}s. Run: node src/cli.js crypto quality --symbol ${symbol} --db`);
+  }
+
+  return check;
 }
 
 export async function writeDataQualityCheck(check, options = {}) {
@@ -212,6 +284,48 @@ function formatBar(bar) {
     return "missing";
   }
   return `time=${bar.time} close=$${Number(bar.close).toFixed(2)}`;
+}
+
+function rowToDataQualityCheck(row) {
+  const raw = parseJson(row.raw, {});
+  const reasons = parseJson(row.reasons, []);
+
+  return {
+    ...raw,
+    symbol: row.symbol,
+    primarySource: row.primary_source,
+    secondarySource: row.secondary_source,
+    primary: raw.primary || (row.primary_bar_time ? {
+      time: toIso(row.primary_bar_time),
+      close: row.primary_close === null ? undefined : Number(row.primary_close)
+    } : null),
+    secondary: raw.secondary || (row.secondary_bar_time ? {
+      time: toIso(row.secondary_bar_time),
+      close: row.secondary_close === null ? undefined : Number(row.secondary_close)
+    } : null),
+    closeDiffBps: row.close_diff_bps === null ? null : Number(row.close_diff_bps),
+    timeDiffSeconds: row.time_diff_seconds === null ? null : Number(row.time_diff_seconds),
+    status: row.status,
+    reasons,
+    checkedAt: toIso(row.check_time)
+  };
+}
+
+function parseJson(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  if (typeof value === "string") {
+    return JSON.parse(value);
+  }
+  return value;
+}
+
+function toIso(value) {
+  if (!value) {
+    return null;
+  }
+  return value instanceof Date ? value.toISOString() : value;
 }
 
 function numberOrNull(value) {

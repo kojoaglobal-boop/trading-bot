@@ -175,3 +175,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_fills_unique_broker_fill
 
 CREATE INDEX IF NOT EXISTS idx_data_quality_symbol_time
   ON data_quality_checks (symbol, check_time DESC);
+
+CREATE INDEX IF NOT EXISTS idx_data_quality_symbol_sources_time
+  ON data_quality_checks (symbol, primary_source, secondary_source, check_time DESC);

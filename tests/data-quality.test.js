@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import {
   compareLatestBars,
   formatDataQualityCheck,
+  loadLatestDataQualityCheck,
+  requireStoredDataQualityPass,
   writeDataQualityCheck
 } from "../src/core/data-quality.js";
 
@@ -87,11 +89,113 @@ test("writeDataQualityCheck stores check result", async () => {
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO data_quality_checks")), true);
 });
 
+test("loadLatestDataQualityCheck maps stored checks", async () => {
+  const pool = fakePool({
+    query() {
+      return {
+        rows: [qualityRow({ status: "pass" })]
+      };
+    }
+  });
+
+  const check = await loadLatestDataQualityCheck({
+    symbol: "BTC/USD",
+    primarySource: "coinbase",
+    secondarySource: "kraken",
+    pool
+  });
+
+  assert.equal(check.symbol, "BTC/USD");
+  assert.equal(check.status, "pass");
+  assert.equal(check.primary.close, 100);
+  assert.equal(check.secondary.close, 100.1);
+  assert.deepEqual(check.reasons, []);
+});
+
+test("requireStoredDataQualityPass blocks missing, failed, or stale checks", async () => {
+  const now = new Date("2026-01-01T01:00:00Z");
+  const passingPool = fakePool({
+    query() {
+      return {
+        rows: [qualityRow({ status: "pass", checkTime: "2026-01-01T00:30:00Z" })]
+      };
+    }
+  });
+  const failedPool = fakePool({
+    query() {
+      return {
+        rows: [qualityRow({ status: "fail", reasons: ["close difference too high"] })]
+      };
+    }
+  });
+  const stalePool = fakePool({
+    query() {
+      return {
+        rows: [qualityRow({ status: "pass", checkTime: "2025-12-31T00:00:00Z" })]
+      };
+    }
+  });
+  const missingPool = fakePool({
+    query() {
+      return { rows: [] };
+    }
+  });
+
+  const check = await requireStoredDataQualityPass({
+    symbol: "BTC/USD",
+    now,
+    pool: passingPool
+  });
+
+  assert.equal(check.status, "pass");
+  await assert.rejects(
+    () => requireStoredDataQualityPass({ symbol: "BTC/USD", now, pool: failedPool }),
+    /FAIL/
+  );
+  await assert.rejects(
+    () => requireStoredDataQualityPass({ symbol: "BTC\/USD", now, maxAgeSeconds: 60, pool: stalePool }),
+    /stale/
+  );
+  await assert.rejects(
+    () => requireStoredDataQualityPass({ symbol: "BTC/USD", now, pool: missingPool }),
+    /No stored data-quality check/
+  );
+});
+
 function bar({ close, time = "2026-01-01T00:00:00Z" }) {
   return {
     time,
     symbol: "BTC/USD",
     assetClass: "meme",
     close
+  };
+}
+
+function qualityRow({ status, reasons = [], checkTime = "2026-01-01T00:00:00Z" }) {
+  return {
+    check_time: new Date(checkTime),
+    symbol: "BTC/USD",
+    primary_source: "coinbase",
+    secondary_source: "kraken",
+    primary_bar_time: new Date("2026-01-01T00:00:00Z"),
+    secondary_bar_time: new Date("2026-01-01T00:00:00Z"),
+    primary_close: "100",
+    secondary_close: "100.1",
+    close_diff_bps: "9.995002",
+    time_diff_seconds: 0,
+    status,
+    reasons,
+    raw: {}
+  };
+}
+
+function fakePool(client) {
+  return {
+    async connect() {
+      return {
+        query: client.query,
+        release() {}
+      };
+    }
   };
 }
