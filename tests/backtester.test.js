@@ -25,7 +25,7 @@ test("backtester processes sample bars and returns account metrics", () => {
     strategy: new MomentumBreakoutStrategy(defaultConfig.strategy.momentumBreakout)
   });
 
-  assert.equal(report.metrics.bars, 500);
+  assert.equal(report.metrics.bars, defaultConfig.universe.length * 100);
   assert.equal(Number.isFinite(report.account.finalEquity), true);
   assert.equal(report.account.finalEquity > 0, true);
   assert.equal(Number.isFinite(report.metrics.winRate), true);

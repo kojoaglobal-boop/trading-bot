@@ -77,6 +77,7 @@ We build and prove one section at a time, in this order:
 1. OANDA demo API
    - Purpose: forex and XAU/USD style testing.
    - Docs: https://developer.oanda.com/rest-live-v20/introduction/
+   - Current XAU/USD command: `node src/cli.js oanda candles --instrument XAU_USD --db`
 
 2. Databento
    - Purpose: high-quality historical and live data, especially futures and better market microstructure research.

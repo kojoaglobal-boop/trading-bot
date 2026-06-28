@@ -32,6 +32,7 @@ node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 node src/cli.js alpaca sync
 node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+node src/cli.js oanda candles --instrument XAU_USD --db
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
 node src/cli.js crypto quality --symbol BTC/USD --db
@@ -60,6 +61,7 @@ npm run alpaca:sync
 npm run alpaca:smoke-order
 npm run alpaca:paper-loop
 npm run scheduler:once
+npm run oanda:xau
 npm run crypto:coinbase
 npm run crypto:kraken
 npm run crypto:quality
@@ -170,6 +172,27 @@ To keep it running every hour:
 
 ```powershell
 node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60
+```
+
+Pull Gold/USD candles through OANDA practice:
+
+```powershell
+node src/cli.js oanda candles --instrument XAU_USD --db
+```
+
+OANDA credentials needed in `.env`:
+
+```text
+OANDA_ACCOUNT_ID=
+OANDA_API_TOKEN=
+OANDA_ENV=practice
+```
+
+Check the practice account and confirm XAU/USD is tradable:
+
+```powershell
+node src/cli.js oanda account
+node src/cli.js oanda instruments
 ```
 
 Pull crypto/meme coin bars through our own normalized data layer:
@@ -309,6 +332,7 @@ Accepted `assetClass` values:
 
 - `meme`
 - `stock`
+- `gold`
 - `future`
 - `forex`
 

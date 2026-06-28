@@ -18,6 +18,7 @@ import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-l
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
+import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
 import {
   formatDataQualityCheck,
@@ -44,6 +45,11 @@ import {
   formatPositions,
   formatSmokeOrderResult
 } from "./integrations/alpaca-client.js";
+import {
+  formatOandaAccountSummary,
+  formatOandaInstruments,
+  OandaClient
+} from "./integrations/oanda-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
 const args = parseArgs(process.argv.slice(2));
@@ -118,6 +124,8 @@ try {
     await runAlpacaCommand(args);
   } else if (command === "crypto") {
     await runCryptoCommand(args);
+  } else if (command === "oanda") {
+    await runOandaCommand(args);
   } else if (command === "export") {
     await runExportCommand(args);
   } else if (command === "scheduler") {
@@ -325,6 +333,54 @@ async function runCryptoCommand(args) {
   node src/cli.js crypto bars --provider coinbase --product PEPE-USD --db
   node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
+`);
+}
+
+async function runOandaCommand(args) {
+  const subcommand = args._[1] || "help";
+  const client = new OandaClient();
+
+  if (subcommand === "account") {
+    const summary = await client.getAccountSummary();
+    console.log(formatOandaAccountSummary(summary));
+    return;
+  }
+
+  if (subcommand === "instruments") {
+    const instruments = await client.getAccountInstruments();
+    console.log(formatOandaInstruments(instruments, {
+      limit: Number(args.limit || 30),
+      focus: String(args.focus || "XAU_USD").toUpperCase()
+    }));
+    return;
+  }
+
+  if (subcommand === "candles") {
+    const result = await fetchOandaCandles({
+      client,
+      instrument: String(args.instrument || "XAU_USD"),
+      granularity: String(args.granularity || "H1"),
+      count: Number(args.count || args.limit || 120),
+      price: String(args.price || "M"),
+      from: args.from,
+      to: args.to
+    });
+
+    console.log(formatOandaMarketData(result));
+
+    if (args.db) {
+      const stored = await upsertMarketBars(result.bars);
+      console.log(`Database market bars: ${stored.bars} bars (${stored.symbols.join(", ")}) from ${stored.sources.join(", ")}`);
+    }
+    return;
+  }
+
+  console.log(`OANDA Commands
+==============
+  node src/cli.js oanda account
+  node src/cli.js oanda instruments
+  node src/cli.js oanda candles --instrument XAU_USD
+  node src/cli.js oanda candles --instrument XAU_USD --db
 `);
 }
 
@@ -548,6 +604,7 @@ Usage:
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
   node src/cli.js alpaca sync
   node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+  node src/cli.js oanda candles --instrument XAU_USD --db
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js export paper-ledger
@@ -565,6 +622,7 @@ Commands:
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
+  oanda      Pull OANDA practice candles for XAU/USD and forex pairs
   export     Export database tracking files that open in Excel
   scheduler  Run the stock paper loop, broker sync, and Excel export together
   doctor     Print environment and safety-gate status

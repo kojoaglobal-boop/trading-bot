@@ -20,6 +20,11 @@ export const defaultConfig = {
       venue: "equity-paper"
     },
     {
+      symbol: "XAU/USD",
+      assetClass: "gold",
+      venue: "oanda-practice"
+    },
+    {
       symbol: "MES",
       assetClass: "future",
       venue: "futures-paper"
@@ -53,13 +58,14 @@ export const defaultConfig = {
     }
   },
   risk: {
-    allowedAssetClasses: ["meme", "stock", "future", "forex"],
+    allowedAssetClasses: ["meme", "stock", "gold", "future", "forex"],
     maxOpenPositions: 6,
     maxRiskPerTradePct: 0.0075,
     maxNotionalPerTradePct: 0.12,
     maxAssetClassExposurePct: {
       meme: 0.14,
       stock: 0.35,
+      gold: 0.25,
       future: 0.25,
       forex: 0.25
     },
@@ -67,12 +73,14 @@ export const defaultConfig = {
     maxSpreadBps: {
       meme: 90,
       stock: 25,
+      gold: 25,
       future: 20,
       forex: 12
     },
     minVolume: {
       meme: 500000,
       stock: 100000,
+      gold: 1,
       future: 2500,
       forex: 1000
     }
@@ -83,6 +91,7 @@ export const defaultConfig = {
       slippageBps: {
         meme: 35,
         stock: 4,
+        gold: 5,
         future: 5,
         forex: 2
       },

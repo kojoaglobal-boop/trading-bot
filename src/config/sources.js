@@ -4,7 +4,7 @@ export const sourceCatalog = [
     label: "Built-in Sample Generator",
     kind: "market-data",
     mode: "simulation",
-    covers: ["meme", "stock", "future", "forex"],
+    covers: ["meme", "stock", "gold", "future", "forex"],
     requiredEnv: [],
     cost: "free",
     purpose: "Deterministic fake bars for testing the bot loop."
@@ -14,7 +14,7 @@ export const sourceCatalog = [
     label: "Local CSV Import",
     kind: "market-data",
     mode: "historical",
-    covers: ["meme", "stock", "future", "forex"],
+    covers: ["meme", "stock", "gold", "future", "forex"],
     requiredEnv: [],
     cost: "free if you already have the data",
     purpose: "Backtesting with exported broker or vendor data."
@@ -55,7 +55,7 @@ export const sourceCatalog = [
     label: "OANDA",
     kind: "broker-and-data",
     mode: "practice-or-live",
-    covers: ["forex"],
+    covers: ["gold", "forex"],
     requiredEnv: ["OANDA_ACCOUNT_ID", "OANDA_API_TOKEN"],
     optionalEnv: ["OANDA_ENV"],
     cost: "demo account available; spreads and financing apply live",
