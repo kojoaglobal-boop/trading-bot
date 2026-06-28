@@ -25,6 +25,7 @@ node src/cli.js walk-forward --sample
 node src/cli.js paper --ticks 200 --audit --db
 node src/cli.js journal
 node src/cli.js journal --db
+node src/cli.js dashboard
 node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
@@ -50,6 +51,7 @@ npm run walk-forward
 npm run paper
 npm run journal
 npm run journal:db
+npm run dashboard
 npm run sources
 npm run db
 npm run alpaca:account
@@ -225,6 +227,12 @@ Review saved audit logs:
 
 ```powershell
 node src/cli.js journal
+```
+
+Show the current bot health dashboard:
+
+```powershell
+node src/cli.js dashboard
 ```
 
 Write the same run to Postgres and read it back:

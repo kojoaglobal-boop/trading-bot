@@ -13,6 +13,7 @@
     "sources": "node src/cli.js sources",
     "journal": "node src/cli.js journal",
     "journal:db": "node src/cli.js journal --db",
+    "dashboard": "node src/cli.js dashboard",
     "alpaca:account": "node src/cli.js alpaca account",
     "alpaca:bars": "node src/cli.js alpaca bars --symbols TSLA,AAPL",
     "alpaca:orders": "node src/cli.js alpaca orders",

@@ -12,6 +12,7 @@ import { assertLiveTradingAllowed } from "./core/live-gateway.js";
 import { formatJournal, loadAuditJournal } from "./core/journal.js";
 import { formatDatabaseConfig, getDatabaseConfig } from "./core/database-config.js";
 import { loadDatabaseJournal, writeAuditToDatabase } from "./core/database-journal.js";
+import { formatDashboardSnapshot, loadDashboardSnapshot } from "./core/dashboard.js";
 import { exportPaperLedger, formatPaperLedgerExport } from "./core/excel-export.js";
 import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
@@ -120,6 +121,9 @@ try {
     console.log(formatJournal(logs, { limit: Number(args.limit || 12) }));
   } else if (command === "db") {
     console.log(formatDatabaseConfig(getDatabaseConfig()));
+  } else if (command === "dashboard") {
+    const snapshot = await loadDashboardSnapshot({ limit: Number(args.limit || 8) });
+    console.log(formatDashboardSnapshot(snapshot));
   } else if (command === "alpaca") {
     await runAlpacaCommand(args);
   } else if (command === "crypto") {
@@ -598,6 +602,7 @@ Usage:
   node src/cli.js paper --ticks 200 --audit --db
   node src/cli.js journal
   node src/cli.js journal --db
+  node src/cli.js dashboard
   node src/cli.js db
   node src/cli.js alpaca account
   node src/cli.js alpaca bars --symbols TSLA,AAPL
@@ -619,6 +624,7 @@ Commands:
              Optimize on a train set, then test out-of-sample
   paper      Run a simulated paper session using generated market bars
   journal    Show saved audit-log summaries. Add --db to read Postgres.
+  dashboard  Show account, run, signal, order, source, and market-data health
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer

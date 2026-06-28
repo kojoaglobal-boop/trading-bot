@@ -204,6 +204,7 @@ Do not install yet:
 - Local Postgres database with durable tables for runs, bars, signals, decisions, orders, fills, account state, and data-quality checks.
 - Alpaca paper account connection, guarded paper-order smoke test, paper loop, and broker sync.
 - Stock paper scheduler that checks the database, runs the Alpaca paper loop, syncs the broker, and exports Excel tracking files.
+- Terminal dashboard for account state, recent runs, signals, risk decisions, orders, fills, positions, market-data health, and missing source keys.
 - Alpaca paper-training sizing: `$100` max paper buy notional, `1:2.5` target R/R, actual risk/target logging.
 - Excel-friendly CSV paper ledger export from Postgres.
 - Coinbase and Kraken public crypto data ingestion into normalized market bars.
