@@ -16,6 +16,7 @@ import { exportPaperLedger, formatPaperLedgerExport } from "./core/excel-export.
 import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
+import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
 import {
@@ -119,6 +120,8 @@ try {
     await runCryptoCommand(args);
   } else if (command === "export") {
     await runExportCommand(args);
+  } else if (command === "scheduler") {
+    await runSchedulerCommand(args);
   } else {
     printHelp();
   }
@@ -339,6 +342,66 @@ async function runExportCommand(args) {
   console.log(formatPaperLedgerExport(result));
 }
 
+async function runSchedulerCommand(args) {
+  const subcommand = args._[1] || "help";
+
+  if (subcommand === "run-once") {
+    const cycle = await runStockPaperCycle(createStockPaperCycleOptions(args));
+    console.log(formatStockPaperCycle(cycle));
+
+    if (!cycle.submitted) {
+      console.log("\nNo paper orders were submitted. Add --confirm-paper to allow Alpaca paper orders.");
+    }
+    return;
+  }
+
+  if (subcommand === "loop") {
+    const intervalMinutes = Number(args.intervalMinutes || args["interval-minutes"] || 60);
+    const cycles = Number(args.cycles || 0);
+    let completed = 0;
+
+    while (!cycles || completed < cycles) {
+      const cycle = await runStockPaperCycle(createStockPaperCycleOptions(args));
+      completed += 1;
+      console.log(formatStockPaperCycle(cycle));
+
+      if (cycles && completed >= cycles) {
+        break;
+      }
+
+      const waitMs = Math.max(1, intervalMinutes) * 60 * 1000;
+      const nextRunAt = new Date(Date.now() + waitMs).toISOString();
+      console.log(`\nNext stock paper cycle: ${nextRunAt}`);
+      await sleep(waitMs);
+    }
+    return;
+  }
+
+  console.log(`Scheduler Commands
+==================
+  node src/cli.js scheduler run-once --symbols TSLA,AAPL
+  node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+  node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60
+`);
+}
+
+function createStockPaperCycleOptions(args) {
+  return {
+    symbols: parseList(args.symbols || "TSLA,AAPL"),
+    timeframe: String(args.timeframe || "1Hour"),
+    bars: Number(args.bars || 80),
+    feed: String(args.feed || "iex"),
+    lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30),
+    submitOrders: Boolean(args["confirm-paper"]),
+    maxBuyNotional: Number(args.maxNotional || args["max-notional"] || defaultConfig.paperTraining.maxBuyNotional),
+    targetRewardRiskRatio: Number(args.targetRR || args["target-rr"] || defaultConfig.paperTraining.targetRewardRiskRatio),
+    exportOutDir: String(args.out || "reports/paper-ledger"),
+    exportLimit: Number(args.limit || 500),
+    writeDatabase: !args["no-db"],
+    exportLedger: !args["no-export"]
+  };
+}
+
 function assertPaperConfirmation(args) {
   if (!args["confirm-paper"]) {
     throw new Error("Refusing to submit even a paper order without --confirm-paper.");
@@ -484,6 +547,7 @@ Usage:
   node src/cli.js alpaca bars --symbols TSLA,AAPL
   node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
   node src/cli.js alpaca sync
+  node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js export paper-ledger
@@ -502,12 +566,17 @@ Commands:
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
   export     Export database tracking files that open in Excel
+  scheduler  Run the stock paper loop, broker sync, and Excel export together
   doctor     Print environment and safety-gate status
   sources    Show market-data, broker, and AI source configuration
 
 Options:
   --env FILE  Load environment variables from FILE instead of .env
 `);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseArgs(argv) {

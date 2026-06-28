@@ -55,15 +55,19 @@ We build and prove one section at a time, in this order:
    - Possible live broker later: Alpaca, only if paper results and execution quality justify it.
    - Reason first: cleanest current API path, easiest broker sync, lower operational complexity than futures or meme coins.
 
-2. Forex
+2. Gold / USD
    - Broker/data next: OANDA demo.
-   - Reason second: 24/5 market, clear demo API, useful for disciplined spread/risk testing.
+   - Reason second: strong movement, clean symbol focus, and a different behavior profile from stocks.
 
-3. Futures
+3. Forex pairs
+   - Broker/data next: OANDA demo.
+   - Reason third: 24/5 market, clear demo API, useful for disciplined spread/risk testing after XAU/USD is stable.
+
+4. Futures
    - Likely providers later: Databento for data, Tradovate or another futures broker for execution.
-   - Reason third: strong opportunity, but leverage, fees, tick size, and contract specs make mistakes expensive.
+   - Reason fourth: strong opportunity, but leverage, fees, tick size, and contract specs make mistakes expensive.
 
-4. Meme coins / DEX
+5. Meme coins / DEX
    - Likely data later: DEXScreener and GeckoTerminal.
    - Likely execution later: Jupiter or 0x with isolated wallet safety.
    - Reason last: highest combined risk from liquidity traps, slippage, scams, wallet security, route quality, and MEV.
@@ -90,7 +94,7 @@ We build and prove one section at a time, in this order:
 
 5. DEXScreener / GeckoTerminal / Jupiter / 0x
    - Purpose: DEX meme coin discovery, DEX pool data, quotes, and eventual guarded wallet execution.
-   - Important: meme coin execution waits until stock, forex, and futures sections have a proven control system.
+   - Important: meme coin execution waits until stock, XAU/USD, forex, and futures sections have a proven control system.
 
 6. OpenAI API
    - Purpose: research assistant, news summarizer, trade journal reviewer, strategy explainer, and anomaly detector.
@@ -188,15 +192,17 @@ Do not install yet:
 1. Run repeated Alpaca paper-loop sessions and sync after each session.
 2. Scheduler.
 3. Dashboard.
-4. OANDA demo adapter.
-5. Strategy ensemble and scoring.
-6. AI research/journal layer.
+4. OANDA XAU/USD demo adapter.
+5. Broader OANDA forex pairs.
+6. Strategy ensemble and scoring.
+7. AI research/journal layer.
 
 ## Completed Final-System Blocks
 
 - GitHub-backed repo, VS Code, Node.js, Python, WSL, Docker Desktop.
 - Local Postgres database with durable tables for runs, bars, signals, decisions, orders, fills, account state, and data-quality checks.
 - Alpaca paper account connection, guarded paper-order smoke test, paper loop, and broker sync.
+- Stock paper scheduler that checks the database, runs the Alpaca paper loop, syncs the broker, and exports Excel tracking files.
 - Alpaca paper-training sizing: `$100` max paper buy notional, `1:2.5` target R/R, actual risk/target logging.
 - Excel-friendly CSV paper ledger export from Postgres.
 - Coinbase and Kraken public crypto data ingestion into normalized market bars.

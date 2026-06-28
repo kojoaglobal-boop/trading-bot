@@ -1,8 +1,9 @@
 # Cross-Market Trading Bot
 
-This is a paper-first trading bot scaffold for experimenting across four market families:
+This is a paper-first trading bot scaffold for experimenting across five market tracks:
 
 - stocks
+- gold / metals
 - forex
 - futures
 - meme coins / crypto
@@ -11,7 +12,7 @@ The first version does **not** place real trades. That is intentional. A bot tha
 
 The engineering standard is documented in `SYSTEM_STANDARD.md`. The short version: no mystery data, no unchecked source, no strategy without proof, no live trading by default.
 
-Market rollout order: stocks first, forex second, futures third, meme coins last. Alpaca is the current stock paper broker; it is not the broker for every market.
+Market rollout order: stocks first, Gold/USD second, forex pairs third, futures fourth, meme coins last. Alpaca is the current stock paper broker; it is not the broker for every market.
 
 ## Quick Start
 
@@ -30,6 +31,7 @@ node src/cli.js alpaca account
 node src/cli.js alpaca bars --symbols TSLA,AAPL
 node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
 node src/cli.js alpaca sync
+node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
 node src/cli.js crypto quality --symbol BTC/USD --db
@@ -57,6 +59,7 @@ npm run alpaca:fills
 npm run alpaca:sync
 npm run alpaca:smoke-order
 npm run alpaca:paper-loop
+npm run scheduler:once
 npm run crypto:coinbase
 npm run crypto:kraken
 npm run crypto:quality
@@ -154,6 +157,20 @@ node src/cli.js alpaca sync
 ```
 
 That stores the latest account snapshot, open positions, recent orders, and recent fill activities.
+
+Run the complete stock paper cycle in one command:
+
+```powershell
+node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+```
+
+That checks the database, runs the Alpaca stock paper loop, writes the run, syncs account/orders/fills, and exports the Excel ledger.
+
+To keep it running every hour:
+
+```powershell
+node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60
+```
 
 Pull crypto/meme coin bars through our own normalized data layer:
 
@@ -320,8 +337,8 @@ The goal is not to make the bot fearless. The goal is to make it disciplined.
 
 ## Next Required Build Blocks
 
-1. Run repeated Alpaca paper-loop sessions and sync after each session.
-2. Add the scheduler for data pulls, quality checks, paper loops, and broker sync.
-3. Add the dashboard for equity, open positions, blocked trades, source health, and recent decisions.
-4. Add OANDA demo forex/XAU data and execution.
+1. Run repeated Alpaca stock scheduler cycles and review the Excel ledger.
+2. Add the dashboard for equity, open positions, blocked trades, source health, and recent decisions.
+3. Add OANDA demo XAU/USD data and execution.
+4. Add broader forex pairs after the XAU/USD track is clean.
 5. Add strategy ensemble scoring across momentum, breakout, and mean-reversion candidates.

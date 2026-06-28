@@ -21,6 +21,8 @@
     "alpaca:sync": "node src/cli.js alpaca sync",
     "alpaca:smoke-order": "node src/cli.js alpaca smoke-order --confirm-paper",
     "alpaca:paper-loop": "node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db",
+    "scheduler:once": "node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper",
+    "scheduler:loop": "node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60",
     "crypto:coinbase": "node src/cli.js crypto bars --provider coinbase --product BTC-USD --db",
     "crypto:kraken": "node src/cli.js crypto bars --provider kraken --pair BTC/USD --db",
     "crypto:quality": "node src/cli.js crypto quality --symbol BTC/USD --db",
