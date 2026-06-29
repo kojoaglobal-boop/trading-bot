@@ -24,7 +24,8 @@ The project standard is defined in `SYSTEM_STANDARD.md`. Every build step must s
    - Purpose: submit, cancel, and track simulated stock orders.
    - Docs: https://docs.alpaca.markets/us/docs/paper-trading
    - Order endpoint: https://docs.alpaca.markets/us/reference/postorder
-   - Current paper loop: `node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db`
+   - Focus stock basket: AAPL, TSLA, NVDA.
+   - Current paper loop: `node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db`
    - Current broker sync: `node src/cli.js alpaca sync`
 
 2. Alpaca market data

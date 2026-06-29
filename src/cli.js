@@ -53,6 +53,7 @@ import {
 } from "./integrations/oanda-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
+const DEFAULT_STOCK_SYMBOLS = defaultConfig.stockPaper.symbols.join(",");
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] || "help";
 const envLoad = await loadDotEnv(args.env || ".env");
@@ -153,7 +154,7 @@ async function runAlpacaCommand(args) {
   }
 
   if (subcommand === "bars") {
-    const symbols = String(args.symbols || "TSLA,AAPL")
+    const symbols = String(args.symbols || DEFAULT_STOCK_SYMBOLS)
       .split(",")
       .map((symbol) => symbol.trim().toUpperCase())
       .filter(Boolean);
@@ -231,7 +232,7 @@ async function runAlpacaCommand(args) {
 
   if (subcommand === "paper-loop") {
     const submitOrders = Boolean(args["confirm-paper"]);
-    const symbols = String(args.symbols || "TSLA,AAPL")
+    const symbols = String(args.symbols || DEFAULT_STOCK_SYMBOLS)
       .split(",")
       .map((symbol) => symbol.trim().toUpperCase())
       .filter(Boolean);
@@ -276,15 +277,15 @@ async function runAlpacaCommand(args) {
   console.log(`Alpaca Commands
 ===============
   node src/cli.js alpaca account
-  node src/cli.js alpaca bars --symbols TSLA,AAPL --feed iex
+  node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA --feed iex
   node src/cli.js alpaca orders
   node src/cli.js alpaca positions
   node src/cli.js alpaca fills
   node src/cli.js alpaca sync
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
-  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
-  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper --max-notional 100 --target-rr 2.5
+  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
+  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
 `);
 }
 
@@ -439,15 +440,15 @@ async function runSchedulerCommand(args) {
 
   console.log(`Scheduler Commands
 ==================
-  node src/cli.js scheduler run-once --symbols TSLA,AAPL
-  node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
-  node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60
+  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA
+  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
+  node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
 `);
 }
 
 function createStockPaperCycleOptions(args) {
   return {
-    symbols: parseList(args.symbols || "TSLA,AAPL"),
+    symbols: parseList(args.symbols || DEFAULT_STOCK_SYMBOLS),
     timeframe: String(args.timeframe || "1Hour"),
     bars: Number(args.bars || 80),
     feed: String(args.feed || "iex"),
@@ -605,10 +606,10 @@ Usage:
   node src/cli.js dashboard
   node src/cli.js db
   node src/cli.js alpaca account
-  node src/cli.js alpaca bars --symbols TSLA,AAPL
-  node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+  node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
+  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
   node src/cli.js alpaca sync
-  node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
   node src/cli.js oanda candles --instrument XAU_USD --db
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db

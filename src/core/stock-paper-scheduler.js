@@ -9,7 +9,7 @@ import { exportPaperLedger } from "./excel-export.js";
 export async function runStockPaperCycle(options = {}) {
   const {
     client = new AlpacaClient(),
-    symbols = ["TSLA", "AAPL"],
+    symbols = defaultConfig.stockPaper.symbols,
     timeframe = "1Hour",
     bars = 80,
     feed = "iex",

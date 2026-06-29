@@ -6,7 +6,7 @@ import { RiskEngine } from "./risk-engine.js";
 
 export async function runAlpacaPaperLoop({
   client,
-  symbols = ["TSLA", "AAPL"],
+  symbols = defaultConfig.stockPaper.symbols,
   timeframe = "1Hour",
   bars = 80,
   feed = "iex",

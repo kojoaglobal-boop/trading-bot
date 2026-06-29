@@ -15,7 +15,17 @@ export const defaultConfig = {
       venue: "crypto-paper"
     },
     {
+      symbol: "AAPL",
+      assetClass: "stock",
+      venue: "equity-paper"
+    },
+    {
       symbol: "TSLA",
+      assetClass: "stock",
+      venue: "equity-paper"
+    },
+    {
+      symbol: "NVDA",
       assetClass: "stock",
       venue: "equity-paper"
     },
@@ -44,6 +54,9 @@ export const defaultConfig = {
       stopLossPct: 0.035,
       takeProfitRR: 2.5
     }
+  },
+  stockPaper: {
+    symbols: ["AAPL", "TSLA", "NVDA"]
   },
   paperTraining: {
     maxBuyNotional: 100,

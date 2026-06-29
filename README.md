@@ -29,10 +29,10 @@ node src/cli.js dashboard
 node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
-node src/cli.js alpaca bars --symbols TSLA,AAPL
-node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
+node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
 node src/cli.js alpaca sync
-node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
 node src/cli.js oanda candles --instrument XAU_USD --db
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
@@ -127,7 +127,7 @@ Then verify the connection:
 
 ```powershell
 node src/cli.js alpaca account
-node src/cli.js alpaca bars --symbols TSLA,AAPL
+node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
 ```
 
 To prove order submission without intending to fill, run a guarded smoke test. It submits a deliberately low paper limit order and immediately cancels it:
@@ -145,13 +145,13 @@ node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
 Run one live-paper strategy cycle using Alpaca historical/current bars, risk checks, and Postgres logging:
 
 ```powershell
-node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db
+node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
 ```
 
 To let that loop submit paper orders, add the explicit paper confirmation. The paper-training loop is capped at `$100` max buy notional by default and logs the estimated stop-risk and target profit for each order:
 
 ```powershell
-node src/cli.js alpaca paper-loop --symbols TSLA,AAPL --db --confirm-paper --max-notional 100 --target-rr 2.5
+node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
 ```
 
 Sync the Alpaca paper broker state into Postgres:
@@ -165,7 +165,7 @@ That stores the latest account snapshot, open positions, recent orders, and rece
 Run the complete stock paper cycle in one command:
 
 ```powershell
-node src/cli.js scheduler run-once --symbols TSLA,AAPL --confirm-paper
+node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
 ```
 
 That checks the database, runs the Alpaca stock paper loop, writes the run, syncs account/orders/fills, and exports the Excel ledger.
@@ -173,7 +173,7 @@ That checks the database, runs the Alpaca stock paper loop, writes the run, sync
 To keep it running every hour:
 
 ```powershell
-node src/cli.js scheduler loop --symbols TSLA,AAPL --confirm-paper --interval-minutes 60
+node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
 ```
 
 Pull Gold/USD candles through OANDA practice:
