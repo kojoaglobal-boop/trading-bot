@@ -98,6 +98,46 @@ test("runAlpacaPaperLoop logs signals and can submit capped paper orders", async
   assert.match(formatAlpacaPaperLoop(run), /Alpaca Live-Paper Strategy Loop/);
 });
 
+test("runAlpacaPaperLoop fetches recent bars one stock at a time", async () => {
+  const requested = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "500",
+        buying_power: "500",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [];
+    },
+    async getStockBars(options) {
+      requested.push(options);
+      const symbol = options.symbols[0];
+      return {
+        bars: {
+          [symbol]: createFlatBars(symbol)
+        }
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    symbols: ["AAPL", "TSLA", "NVDA"],
+    bars: 30,
+    submitOrders: false,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.deepEqual(requested.map((request) => request.symbols), [["AAPL"], ["TSLA"], ["NVDA"]]);
+  assert.equal(requested.every((request) => request.sort === "desc"), true);
+  assert.equal(run.signals.length, 3);
+  assert.equal(run.signals.every((signal) => signal.reason !== "no Alpaca bars returned"), true);
+});
+
 function createBreakoutBars(symbol) {
   const bars = [];
   let close = 100;
@@ -120,4 +160,16 @@ function createBreakoutBars(symbol) {
   }
 
   return bars;
+}
+
+function createFlatBars(symbol) {
+  return Array.from({ length: 30 }, (_value, index) => ({
+    t: new Date(Date.UTC(2026, 0, 1, index)).toISOString(),
+    o: 100,
+    h: 101,
+    l: 99,
+    c: 100,
+    v: 200000,
+    symbol
+  }));
 }

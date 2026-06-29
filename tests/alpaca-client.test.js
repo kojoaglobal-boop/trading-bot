@@ -126,6 +126,7 @@ test("AlpacaClient fetches historical stock bars and positions", async () => {
   assert.equal(positions[0].symbol, "TSLA");
   assert.match(calls[0], /timeframe=1Hour/);
   assert.match(calls[0], /limit=80/);
+  assert.match(calls[0], /sort=desc/);
 });
 
 test("AlpacaClient fetches orders with filters and fill activities", async () => {

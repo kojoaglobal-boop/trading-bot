@@ -48,6 +48,7 @@ export class AlpacaClient {
     timeframe = "1Hour",
     limit = 80,
     feed = "iex",
+    sort = "desc",
     start,
     end
   }) {
@@ -59,7 +60,7 @@ export class AlpacaClient {
     url.searchParams.set("symbols", symbols.join(","));
     url.searchParams.set("timeframe", timeframe);
     url.searchParams.set("limit", String(limit));
-    url.searchParams.set("sort", "asc");
+    url.searchParams.set("sort", String(sort || "desc"));
     if (feed) {
       url.searchParams.set("feed", feed);
     }

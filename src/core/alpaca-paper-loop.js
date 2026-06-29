@@ -29,10 +29,10 @@ export async function runAlpacaPaperLoop({
   const [account, positions, barPayload] = await Promise.all([
     client.getAccount(),
     client.getPositions(),
-    client.getStockBars({
+    getStockBarsForSymbols(client, {
       symbols: normalizedSymbols,
       timeframe,
-      limit: bars,
+      bars,
       feed,
       start,
       end: createdAt
@@ -180,6 +180,32 @@ export async function runAlpacaPaperLoop({
       orders: orders.length,
       submittedOrders: orders.filter((order) => order.status !== "planned").length
     }
+  };
+}
+
+async function getStockBarsForSymbols(client, {
+  symbols,
+  timeframe,
+  bars,
+  feed,
+  start,
+  end
+}) {
+  const payloads = await Promise.all(symbols.map(async (symbol) => client.getStockBars({
+    symbols: [symbol],
+    timeframe,
+    limit: bars,
+    feed,
+    sort: "desc",
+    start,
+    end
+  })));
+
+  return {
+    bars: payloads.reduce((combined, payload) => ({
+      ...combined,
+      ...(payload.bars || {})
+    }), {})
   };
 }
 
