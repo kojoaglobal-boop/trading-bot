@@ -30,6 +30,10 @@ test("writeAlpacaPaperRunToDatabase stores run, account, signals, risk, and orde
       buyingPower: 500,
       portfolioValue: 500
     },
+    dailyGuard: {
+      dailyPnl: 60,
+      status: "profit-target-reached"
+    },
     signals: [{
       time: "2026-01-01T12:00:00Z",
       symbol: "TSLA",
@@ -84,4 +88,7 @@ test("writeAlpacaPaperRunToDatabase stores run, account, signals, risk, and orde
   const runInsert = queries.find((query) => query.sql.includes("INSERT INTO bot_runs"));
   const metadata = JSON.parse(runInsert.params[4]);
   assert.equal(metadata.profile, "scalp");
+  assert.equal(metadata.dailyGuard.status, "profit-target-reached");
+  const accountInsert = queries.find((query) => query.sql.includes("INSERT INTO account_snapshots"));
+  assert.equal(accountInsert.params[5], 60);
 });

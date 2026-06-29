@@ -41,6 +41,7 @@ export async function runStockPaperCycle(options = {}) {
   const syncPaperState = options.syncPaperState || syncAlpacaPaperState;
   const writeSync = options.writeSync || writeAlpacaSyncToDatabase;
   const exportPaperLedgerFn = options.exportPaperLedgerFn || exportPaperLedger;
+  const loadDailyStartEquity = options.loadDailyStartEquity || loadAlpacaDailyStartEquity;
 
   const startedAt = now.toISOString();
   const normalizedSymbols = normalizeSymbols(symbols);
@@ -63,6 +64,10 @@ export async function runStockPaperCycle(options = {}) {
   if (writeDatabase && preflightDatabase) {
     cycle.steps.database = await preflightDatabase();
   }
+  const dailyStart = writeDatabase
+    ? await loadDailyStartEquity({ now })
+    : null;
+  cycle.steps.dailyStart = dailyStart;
 
   const paperRun = await runPaperLoop({
     client,
@@ -75,6 +80,7 @@ export async function runStockPaperCycle(options = {}) {
     submitOrders,
     maxBuyNotional,
     targetRewardRiskRatio,
+    dailyStartEquity: dailyStart?.equity,
     now
   });
   cycle.steps.paperLoop = {
@@ -131,6 +137,50 @@ export async function assertSchedulerDatabaseReady(options = {}) {
   }
 }
 
+export async function loadAlpacaDailyStartEquity(options = {}) {
+  const pool = options.pool || createDatabasePool();
+  const shouldClosePool = !options.pool;
+  const now = options.now || new Date();
+
+  try {
+    return await withDatabaseClient(async (client) => {
+      const result = await client.query(
+        `SELECT equity, snapshot_time
+         FROM account_snapshots
+         WHERE source = 'alpaca-paper'
+           AND equity IS NOT NULL
+           AND snapshot_time >= (
+             date_trunc('day', $1::timestamptz AT TIME ZONE 'America/New_York')
+             AT TIME ZONE 'America/New_York'
+           )
+           AND snapshot_time < (
+             (date_trunc('day', $1::timestamptz AT TIME ZONE 'America/New_York') + interval '1 day')
+             AT TIME ZONE 'America/New_York'
+           )
+         ORDER BY snapshot_time ASC, id ASC
+         LIMIT 1`,
+        [now.toISOString()]
+      );
+      const row = result.rows[0];
+
+      if (!row) {
+        return null;
+      }
+
+      return {
+        equity: Number(row.equity),
+        snapshotTime: row.snapshot_time instanceof Date
+          ? row.snapshot_time.toISOString()
+          : String(row.snapshot_time)
+      };
+    }, { pool });
+  } finally {
+    if (shouldClosePool && pool.end) {
+      await pool.end();
+    }
+  }
+}
+
 export function formatStockPaperCycle(cycle) {
   const paperRun = cycle.steps.paperLoop?.run || {};
   const paperDb = cycle.steps.paperLoop?.database;
@@ -146,6 +196,12 @@ export function formatStockPaperCycle(cycle) {
   lines.push(`Profile:       ${cycle.profile || "standard"}`);
   lines.push(`Symbols:       ${cycle.symbols.join(", ")}`);
   lines.push(`Timeframe:     ${cycle.timeframe || "n/a"}`);
+  if (cycle.steps.dailyStart?.equity) {
+    lines.push(`Day start:     ${money(cycle.steps.dailyStart.equity)}`);
+  }
+  if (paperRun.dailyGuard) {
+    lines.push(`Daily P/L:     ${money(paperRun.dailyGuard.dailyPnl)} (${paperRun.dailyGuard.status})`);
+  }
   lines.push(`Database:      ${cycle.writeDatabase ? "required + written" : "off"}`);
   lines.push(`Excel export:  ${cycle.exportLedger ? "written" : "off"}`);
   lines.push(`Paper run:     ${paperRun.runId || "n/a"}`);
@@ -202,4 +258,11 @@ function normalizeSymbols(symbols) {
     .split(",")
     .map((symbol) => symbol.trim().toUpperCase())
     .filter(Boolean);
+}
+
+function money(value) {
+  return `$${Number(value || 0).toLocaleString("en-US", {
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2
+  })}`;
 }

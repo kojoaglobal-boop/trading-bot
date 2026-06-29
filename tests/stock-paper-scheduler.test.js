@@ -17,11 +17,16 @@ test("runStockPaperCycle runs paper loop, broker sync, database writes, and ledg
       calls.push("preflight");
       return { ok: true, checkedAt: now.toISOString() };
     },
+    loadDailyStartEquity: async () => {
+      calls.push("daily-start");
+      return { equity: 500, snapshotTime: now.toISOString() };
+    },
     runPaperLoop: async (options) => {
       calls.push("paper-loop");
       assert.deepEqual(options.symbols, ["AAPL", "TSLA"]);
       assert.equal(options.submitOrders, true);
       assert.equal(options.maxBuyNotional, 100);
+      assert.equal(options.dailyStartEquity, 500);
       return {
         runId: "paper-1",
         summary: {
@@ -79,7 +84,7 @@ test("runStockPaperCycle runs paper loop, broker sync, database writes, and ledg
     }
   });
 
-  assert.deepEqual(calls, ["preflight", "paper-loop", "paper-db", "sync", "sync-db", "export"]);
+  assert.deepEqual(calls, ["preflight", "daily-start", "paper-loop", "paper-db", "sync", "sync-db", "export"]);
   assert.equal(cycle.submitted, true);
   assert.equal(cycle.summary.signals, 2);
   assert.equal(cycle.summary.submittedOrders, 1);
@@ -88,6 +93,7 @@ test("runStockPaperCycle runs paper loop, broker sync, database writes, and ledg
   assert.equal(cycle.summary.exportFiles, 2);
   assert.match(formatStockPaperCycle(cycle), /Stock Paper Scheduler Cycle/);
   assert.match(formatStockPaperCycle(cycle), /Paper DB:/);
+  assert.match(formatStockPaperCycle(cycle), /Day start:\s+\$500.00/);
 });
 
 test("runStockPaperCycle can run in decision-only mode without database or export", async () => {

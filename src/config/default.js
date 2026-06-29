@@ -63,6 +63,11 @@ export const defaultConfig = {
     maxBuyNotional: 100,
     targetRiskPerTradeDollars: 30,
     targetRewardRiskRatio: 2.5,
+    dailyGuard: {
+      profitTargetDollars: 50,
+      profitStretchDollars: 100,
+      maxLossDollars: 50
+    },
     profiles: {
       scalp: {
         timeframe: "5Min",
@@ -72,6 +77,11 @@ export const defaultConfig = {
         maxBuyNotional: 100,
         targetRiskPerTradeDollars: 20,
         targetRewardRiskRatio: 1.3,
+        dailyGuard: {
+          profitTargetDollars: 50,
+          profitStretchDollars: 100,
+          maxLossDollars: 50
+        },
         strategy: {
           fastPeriod: 3,
           slowPeriod: 8,

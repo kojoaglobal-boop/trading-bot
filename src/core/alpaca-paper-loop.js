@@ -1,6 +1,7 @@
 import { defaultConfig } from "../config/default.js";
 import { createPaperMarketOrderFromRiskOrder } from "../integrations/alpaca-client.js";
 import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
+import { checkDailyEntryGuard, createDailyTradingGuard } from "./daily-trading-guard.js";
 import { getPaperTrainingProfile } from "./paper-training-profile.js";
 import { Portfolio } from "./portfolio.js";
 import { RiskEngine } from "./risk-engine.js";
@@ -15,6 +16,7 @@ export async function runAlpacaPaperLoop({
   submitOrders = false,
   maxBuyNotional,
   targetRewardRiskRatio,
+  dailyStartEquity,
   config = defaultConfig,
   profile = config.paperTraining?.defaultProfile || "standard",
   now = new Date()
@@ -58,6 +60,13 @@ export async function runAlpacaPaperLoop({
   });
   const barsBySymbol = groupBarsBySymbol(alpacaBars);
   const portfolio = createPortfolioFromAlpaca(account, positions);
+  const normalizedAccount = normalizeAccount(account);
+  const dailyGuard = createDailyTradingGuard({
+    account: normalizedAccount,
+    dailyStartEquity,
+    config: runConfig.paperTraining.dailyGuard,
+    now
+  });
   const riskEngine = new RiskEngine(runConfig.risk);
   const strategy = new MomentumBreakoutStrategy(runConfig.strategy.momentumBreakout);
   const markPrices = new Map();
@@ -115,12 +124,21 @@ export async function runAlpacaPaperLoop({
       continue;
     }
 
-    const riskResult = riskEngine.createOrder({
-      bar: latestBar,
-      markPrices,
-      portfolio,
-      signal
-    });
+    const dailyGuardRejection = signal.action === "BUY"
+      ? checkDailyEntryGuard(dailyGuard)
+      : null;
+    const riskResult = dailyGuardRejection
+      ? {
+          approved: false,
+          reason: dailyGuardRejection,
+          rule: "daily-trading-guard"
+        }
+      : riskEngine.createOrder({
+          bar: latestBar,
+          markPrices,
+          portfolio,
+          signal
+        });
 
     const riskRecord = {
       time: latestBar.time,
@@ -129,8 +147,10 @@ export async function runAlpacaPaperLoop({
       action: signal.action,
       approved: riskResult.approved,
       reason: riskResult.approved ? "approved" : riskResult.reason,
+      rule: riskResult.rule || "risk-engine",
       order: riskResult.order || null,
-      signal: signalRecord
+      signal: signalRecord,
+      dailyGuard
     };
     riskDecisions.push(riskRecord);
 
@@ -194,9 +214,10 @@ export async function runAlpacaPaperLoop({
     maxBuyNotional: runConfig.paperTraining.maxBuyNotional,
     targetRewardRiskRatio: runConfig.paperTraining.targetRewardRiskRatio,
     targetRiskPerTradeDollars: runConfig.paperTraining.targetRiskPerTradeDollars,
+    dailyGuard,
     marketClock: normalizeMarketClock(marketClock),
     orderSubmissionEnabled,
-    account: normalizeAccount(account),
+    account: normalizedAccount,
     rawAccount: account,
     positions: positions.map(normalizeAlpacaPosition),
     barsProcessed,
@@ -267,6 +288,12 @@ export function formatAlpacaPaperLoop(run) {
   lines.push(`Target R/R:    1:${Number(run.targetRewardRiskRatio || 0).toFixed(2)}`);
   lines.push(`Buying Power:  ${money(run.account.buyingPower)}`);
   lines.push(`Equity:        ${money(run.account.portfolioValue)}`);
+  if (run.dailyGuard) {
+    lines.push(`Daily P/L:     ${money(run.dailyGuard.dailyPnl)} (${run.dailyGuard.status})`);
+    lines.push(
+      `Daily guard:   target ${money(run.dailyGuard.profitTargetDollars)} stretch ${money(run.dailyGuard.profitStretchDollars)} stop -${money(run.dailyGuard.maxLossDollars)}`
+    );
+  }
   lines.push(`Signals:       ${run.summary.signals}`);
   lines.push(`Actionable:    ${run.summary.actionableSignals}`);
   lines.push(`Risk approved: ${run.summary.approvedRiskDecisions}`);
@@ -346,6 +373,10 @@ function createPaperTrainingConfig(config, overrides = {}) {
   const profileConfig = profile.config || {};
   const profileRisk = profileConfig.risk || {};
   const profileStrategy = profileConfig.strategy || {};
+  const dailyGuard = {
+    ...(training.dailyGuard || {}),
+    ...(profileConfig.dailyGuard || {})
+  };
   const targetRewardRiskRatio = Number(
     overrides.targetRewardRiskRatio ??
     profileConfig.targetRewardRiskRatio ??
@@ -400,7 +431,8 @@ function createPaperTrainingConfig(config, overrides = {}) {
       profile: profile.name,
       maxBuyNotional: Number(overrides.maxBuyNotional ?? profileConfig.maxBuyNotional ?? training.maxBuyNotional ?? 100),
       targetRewardRiskRatio: strategy.momentumBreakout.takeProfitRR,
-      targetRiskPerTradeDollars: risk.targetRiskPerTradeDollars
+      targetRiskPerTradeDollars: risk.targetRiskPerTradeDollars,
+      dailyGuard
     }
   };
 }

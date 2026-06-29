@@ -98,6 +98,111 @@ test("runAlpacaPaperLoop logs signals and can submit capped paper orders", async
   assert.match(formatAlpacaPaperLoop(run), /Alpaca Live-Paper Strategy Loop/);
 });
 
+test("runAlpacaPaperLoop blocks fresh buys after daily profit target", async () => {
+  const submittedOrders = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "500",
+        buying_power: "500",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [];
+    },
+    async getStockBars() {
+      return {
+        bars: {
+          TSLA: createBreakoutBars("TSLA")
+        }
+      };
+    },
+    async submitOrder(order) {
+      submittedOrders.push(order);
+      return {
+        id: "order-1",
+        status: "accepted",
+        ...order
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    symbols: ["TSLA"],
+    bars: 30,
+    dailyStartEquity: 440,
+    submitOrders: true,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(run.dailyGuard.status, "profit-target-reached");
+  assert.equal(run.dailyGuard.dailyPnl, 60);
+  assert.equal(run.signals[0].action, "BUY");
+  assert.equal(run.riskDecisions[0].approved, false);
+  assert.equal(run.riskDecisions[0].rule, "daily-trading-guard");
+  assert.match(run.riskDecisions[0].reason, /daily profit target/);
+  assert.equal(run.orders.length, 0);
+  assert.equal(submittedOrders.length, 0);
+});
+
+test("runAlpacaPaperLoop still allows exits after daily guard is reached", async () => {
+  const submittedOrders = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "400",
+        buying_power: "400",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [{
+        symbol: "TSLA",
+        asset_class: "us_equity",
+        qty: "1",
+        avg_entry_price: "100"
+      }];
+    },
+    async getStockBars() {
+      return {
+        bars: {
+          TSLA: createExitBars("TSLA")
+        }
+      };
+    },
+    async submitOrder(order) {
+      submittedOrders.push(order);
+      return {
+        id: "order-exit",
+        status: "accepted",
+        ...order
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    profile: "scalp",
+    symbols: ["TSLA"],
+    dailyStartEquity: 440,
+    submitOrders: true,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(run.dailyGuard.status, "profit-target-reached");
+  assert.equal(run.signals[0].action, "SELL");
+  assert.equal(run.riskDecisions[0].approved, true);
+  assert.equal(run.orders.length, 1);
+  assert.equal(submittedOrders.length, 1);
+  assert.equal(submittedOrders[0].side, "sell");
+});
+
 test("runAlpacaPaperLoop skips paper submission when Alpaca market clock is closed", async () => {
   let submitCalled = false;
   const client = {
@@ -308,6 +413,18 @@ function createFlatBars(symbol) {
     h: 101,
     l: 99,
     c: 100,
+    v: 200000,
+    symbol
+  }));
+}
+
+function createExitBars(symbol) {
+  return Array.from({ length: 30 }, (_value, index) => ({
+    t: new Date(Date.UTC(2026, 0, 1, index)).toISOString(),
+    o: index === 29 ? 101 : 100,
+    h: index === 29 ? 103 : 101,
+    l: 99,
+    c: index === 29 ? 102 : 100,
     v: 200000,
     symbol
   }));

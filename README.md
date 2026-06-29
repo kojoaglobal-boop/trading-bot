@@ -186,6 +186,13 @@ node src/cli.js scheduler run-once --profile scalp --symbols AAPL,TSLA,NVDA --co
 
 The scalp profile uses 5-minute candles, tighter stops, a 1.3R target, and the same paper-only Alpaca guardrails. It is built to attempt more trades without opening real-money risk.
 
+Daily paper guardrails are active for stock training:
+
+- Stop opening fresh trades after daily P/L reaches **+$50**.
+- Let existing positions keep being managed, so a good winner can still push toward **+$100**.
+- Stop opening fresh trades after daily P/L reaches **-$50**.
+- SELL exits stay allowed because reducing risk is still safer than freezing a position.
+
 To keep it running every hour:
 
 ```powershell

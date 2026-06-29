@@ -45,6 +45,7 @@ async function upsertLiveRun(client, run) {
     submitted: run.submitted,
     orderSubmissionEnabled: run.orderSubmissionEnabled,
     marketClock: run.marketClock,
+    dailyGuard: run.dailyGuard,
     summary: run.summary,
     account: run.account,
     sources: [{
@@ -97,14 +98,16 @@ async function insertAccountSnapshot(client, run) {
       cash,
       buying_power,
       equity,
+      daily_pnl,
       raw
-    ) VALUES ($1, 'alpaca-paper', $2, $3, $4, $5, $6)`,
+    ) VALUES ($1, 'alpaca-paper', $2, $3, $4, $5, $6, $7)`,
     [
       run.runId,
       run.createdAt,
       numberOrNull(run.account.cash),
       numberOrNull(run.account.buyingPower),
       numberOrNull(run.account.portfolioValue),
+      numberOrNull(run.dailyGuard?.dailyPnl),
       JSON.stringify(run.rawAccount || run.account)
     ]
   );
@@ -149,13 +152,14 @@ async function insertRiskDecisions(client, run) {
         rule,
         reason,
         risk_snapshot
-      ) VALUES ($1, $2, $3, $4, $5, 'risk-engine', $6, $7)`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [
         run.runId,
         decision.time,
         decision.symbol,
         decision.action,
         Boolean(decision.approved),
+        decision.rule || "risk-engine",
         decision.reason || null,
         JSON.stringify(decision)
       ]
