@@ -40,6 +40,7 @@ import {
   createTinyMarketOrder,
   formatAlpacaAccount,
   formatActivities,
+  formatAlpacaClock,
   formatLatestBars,
   formatOrder,
   formatOrders,
@@ -150,6 +151,12 @@ async function runAlpacaCommand(args) {
   if (subcommand === "account") {
     const account = await client.getAccount();
     console.log(formatAlpacaAccount(account));
+    return;
+  }
+
+  if (subcommand === "clock") {
+    const clock = await client.getClock();
+    console.log(formatAlpacaClock(clock));
     return;
   }
 
@@ -277,6 +284,7 @@ async function runAlpacaCommand(args) {
   console.log(`Alpaca Commands
 ===============
   node src/cli.js alpaca account
+  node src/cli.js alpaca clock
   node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA --feed iex
   node src/cli.js alpaca orders
   node src/cli.js alpaca positions
@@ -606,6 +614,7 @@ Usage:
   node src/cli.js dashboard
   node src/cli.js db
   node src/cli.js alpaca account
+  node src/cli.js alpaca clock
   node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
   node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
   node src/cli.js alpaca sync

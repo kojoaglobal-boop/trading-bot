@@ -378,6 +378,17 @@ export function formatAlpacaAccount(account) {
   return lines.join("\n");
 }
 
+export function formatAlpacaClock(clock) {
+  const lines = [];
+  lines.push("Alpaca Paper Market Clock");
+  lines.push("=========================");
+  lines.push(`Market Open: ${clock.is_open ? "yes" : "no"}`);
+  lines.push(`Timestamp:   ${clock.timestamp || "unknown"}`);
+  lines.push(`Next Open:   ${clock.next_open || "unknown"}`);
+  lines.push(`Next Close:  ${clock.next_close || "unknown"}`);
+  return lines.join("\n");
+}
+
 export function formatLatestBars(payload) {
   const bars = payload.bars || {};
   const symbols = Object.keys(bars).sort();

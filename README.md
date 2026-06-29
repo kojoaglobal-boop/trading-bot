@@ -29,6 +29,7 @@ node src/cli.js dashboard
 node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
+node src/cli.js alpaca clock
 node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
 node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
 node src/cli.js alpaca sync
@@ -127,6 +128,7 @@ Then verify the connection:
 
 ```powershell
 node src/cli.js alpaca account
+node src/cli.js alpaca clock
 node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
 ```
 

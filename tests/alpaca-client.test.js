@@ -7,6 +7,7 @@ import {
   createTinyMarketOrder,
   formatAlpacaAccount,
   formatActivities,
+  formatAlpacaClock,
   formatLatestBars,
   formatOrder,
   formatOrders,
@@ -353,6 +354,15 @@ test("Alpaca formatters do not reveal credentials", () => {
       cash: "500"
     }),
     /Buying Power/
+  );
+  assert.match(
+    formatAlpacaClock({
+      is_open: true,
+      timestamp: "2026-01-01T14:30:00Z",
+      next_open: "2026-01-02T14:30:00Z",
+      next_close: "2026-01-01T21:00:00Z"
+    }),
+    /Market Open: yes/
   );
   assert.match(
     formatLatestBars({
