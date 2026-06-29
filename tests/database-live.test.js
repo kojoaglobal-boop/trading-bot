@@ -19,6 +19,7 @@ test("writeAlpacaPaperRunToDatabase stores run, account, signals, risk, and orde
   const result = await writeAlpacaPaperRunToDatabase({
     runId: "run-1",
     createdAt: "2026-01-01T12:00:00Z",
+    profile: "scalp",
     symbols: ["TSLA"],
     timeframe: "1Hour",
     feed: "iex",
@@ -80,4 +81,7 @@ test("writeAlpacaPaperRunToDatabase stores run, account, signals, risk, and orde
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO account_snapshots")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO strategy_signals")), true);
   assert.equal(queries.some((query) => query.sql.includes("INSERT INTO broker_orders")), true);
+  const runInsert = queries.find((query) => query.sql.includes("INSERT INTO bot_runs"));
+  const metadata = JSON.parse(runInsert.params[4]);
+  assert.equal(metadata.profile, "scalp");
 });

@@ -18,6 +18,7 @@ import { writeAlpacaPaperRunToDatabase } from "./core/database-live.js";
 import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-loop.js";
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
+import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
@@ -246,13 +247,14 @@ async function runAlpacaCommand(args) {
     const run = await runAlpacaPaperLoop({
       client,
       symbols,
-      timeframe: String(args.timeframe || "1Hour"),
-      bars: Number(args.bars || 80),
+      profile: String(args.profile || defaultConfig.paperTraining.defaultProfile || "standard"),
+      timeframe: args.timeframe ? String(args.timeframe) : undefined,
+      bars: optionalNumber(args.bars),
       feed: String(args.feed || "iex"),
-      lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30),
+      lookbackDays: optionalNumber(args.lookbackDays || args["lookback-days"]),
       submitOrders,
-      maxBuyNotional: Number(args.maxNotional || args["max-notional"] || defaultConfig.paperTraining.maxBuyNotional),
-      targetRewardRiskRatio: Number(args.targetRR || args["target-rr"] || defaultConfig.paperTraining.targetRewardRiskRatio)
+      maxBuyNotional: optionalNumber(args.maxNotional || args["max-notional"]),
+      targetRewardRiskRatio: optionalNumber(args.targetRR || args["target-rr"])
     });
 
     console.log(formatAlpacaPaperLoop(run));
@@ -294,6 +296,7 @@ async function runAlpacaCommand(args) {
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
   node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
   node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
+  node src/cli.js alpaca paper-loop --profile scalp --symbols AAPL,TSLA,NVDA --db --confirm-paper
 `);
 }
 
@@ -425,7 +428,11 @@ async function runSchedulerCommand(args) {
   }
 
   if (subcommand === "loop") {
-    const intervalMinutes = Number(args.intervalMinutes || args["interval-minutes"] || 60);
+    const intervalMinutes = Number(
+      args.intervalMinutes ||
+      args["interval-minutes"] ||
+      getDefaultSchedulerIntervalMinutes(args.profile)
+    );
     const cycles = Number(args.cycles || 0);
     let completed = 0;
 
@@ -450,25 +457,36 @@ async function runSchedulerCommand(args) {
 ==================
   node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA
   node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
+  node src/cli.js scheduler run-once --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
   node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
+  node src/cli.js scheduler loop --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
 `);
 }
 
 function createStockPaperCycleOptions(args) {
   return {
     symbols: parseList(args.symbols || DEFAULT_STOCK_SYMBOLS),
-    timeframe: String(args.timeframe || "1Hour"),
-    bars: Number(args.bars || 80),
+    profile: String(args.profile || defaultConfig.paperTraining.defaultProfile || "standard"),
+    timeframe: args.timeframe ? String(args.timeframe) : undefined,
+    bars: optionalNumber(args.bars),
     feed: String(args.feed || "iex"),
-    lookbackDays: Number(args.lookbackDays || args["lookback-days"] || 30),
+    lookbackDays: optionalNumber(args.lookbackDays || args["lookback-days"]),
     submitOrders: Boolean(args["confirm-paper"]),
-    maxBuyNotional: Number(args.maxNotional || args["max-notional"] || defaultConfig.paperTraining.maxBuyNotional),
-    targetRewardRiskRatio: Number(args.targetRR || args["target-rr"] || defaultConfig.paperTraining.targetRewardRiskRatio),
+    maxBuyNotional: optionalNumber(args.maxNotional || args["max-notional"]),
+    targetRewardRiskRatio: optionalNumber(args.targetRR || args["target-rr"]),
     exportOutDir: String(args.out || "reports/paper-ledger"),
     exportLimit: Number(args.limit || 500),
     writeDatabase: !args["no-db"],
     exportLedger: !args["no-export"]
   };
+}
+
+function getDefaultSchedulerIntervalMinutes(profileName) {
+  const profile = getPaperTrainingProfile(
+    defaultConfig,
+    profileName || defaultConfig.paperTraining.defaultProfile || "standard"
+  );
+  return Number(profile.config.intervalMinutes || 60);
 }
 
 function assertPaperConfirmation(args) {
@@ -519,6 +537,14 @@ function parseList(value) {
     .split(",")
     .map((item) => item.trim().toUpperCase())
     .filter(Boolean);
+}
+
+function optionalNumber(value) {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+
+  return Number(value);
 }
 
 async function requireQualityForStoredBars({ source, mode, symbols }) {

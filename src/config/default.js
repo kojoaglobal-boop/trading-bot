@@ -59,9 +59,43 @@ export const defaultConfig = {
     symbols: ["AAPL", "TSLA", "NVDA"]
   },
   paperTraining: {
+    defaultProfile: "standard",
     maxBuyNotional: 100,
     targetRiskPerTradeDollars: 30,
     targetRewardRiskRatio: 2.5,
+    profiles: {
+      scalp: {
+        timeframe: "5Min",
+        bars: 120,
+        lookbackDays: 5,
+        intervalMinutes: 5,
+        maxBuyNotional: 100,
+        targetRiskPerTradeDollars: 20,
+        targetRewardRiskRatio: 1.3,
+        strategy: {
+          fastPeriod: 3,
+          slowPeriod: 8,
+          breakoutLookback: 6,
+          minVolumeExpansion: 0.9,
+          stopLossPct: 0.012,
+          takeProfitRR: 1.3
+        },
+        risk: {
+          maxOpenPositions: 3,
+          maxRiskPerTradePct: 0.04,
+          maxNotionalPerTradePct: 0.25,
+          maxAssetClassExposurePct: {
+            stock: 0.7
+          },
+          maxSpreadBps: {
+            stock: 20
+          },
+          minVolume: {
+            stock: 50000
+          }
+        }
+      }
+    },
     risk: {
       maxRiskPerTradePct: 0.06,
       maxNotionalPerTradePct: 0.25,

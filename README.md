@@ -178,10 +178,24 @@ node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
 
 That checks the database, runs the Alpaca stock paper loop, writes the run, syncs account/orders/fills, and exports the Excel ledger.
 
+Run the faster stock scalp profile:
+
+```powershell
+node src/cli.js scheduler run-once --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
+```
+
+The scalp profile uses 5-minute candles, tighter stops, a 1.3R target, and the same paper-only Alpaca guardrails. It is built to attempt more trades without opening real-money risk.
+
 To keep it running every hour:
 
 ```powershell
 node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
+```
+
+To run the scalp profile repeatedly, it defaults to a 5-minute interval:
+
+```powershell
+node src/cli.js scheduler loop --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
 ```
 
 Pull Gold/USD candles through OANDA practice:

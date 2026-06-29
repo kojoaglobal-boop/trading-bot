@@ -5,33 +5,42 @@ import { syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./alpaca-sync.j
 import { createDatabasePool, withDatabaseClient } from "./database-client.js";
 import { writeAlpacaPaperRunToDatabase } from "./database-live.js";
 import { exportPaperLedger } from "./excel-export.js";
+import { getPaperTrainingProfile } from "./paper-training-profile.js";
 
 export async function runStockPaperCycle(options = {}) {
-  const {
-    client = new AlpacaClient(),
-    symbols = defaultConfig.stockPaper.symbols,
-    timeframe = "1Hour",
-    bars = 80,
-    feed = "iex",
-    lookbackDays = 30,
-    submitOrders = false,
-    maxBuyNotional = defaultConfig.paperTraining.maxBuyNotional,
-    targetRewardRiskRatio = defaultConfig.paperTraining.targetRewardRiskRatio,
-    writeDatabase = true,
-    exportLedger = true,
-    exportOutDir = "reports/paper-ledger",
-    exportLimit = 500,
-    syncStatus = "all",
-    syncLimit = 100,
-    syncActivityDays = 7,
-    now = new Date(),
-    preflightDatabase = assertSchedulerDatabaseReady,
-    runPaperLoop = runAlpacaPaperLoop,
-    writePaperRun = writeAlpacaPaperRunToDatabase,
-    syncPaperState = syncAlpacaPaperState,
-    writeSync = writeAlpacaSyncToDatabase,
-    exportPaperLedgerFn = exportPaperLedger
-  } = options;
+  const profileSettings = getPaperTrainingProfile(
+    defaultConfig,
+    options.profile || defaultConfig.paperTraining.defaultProfile || "standard"
+  );
+  const client = options.client || new AlpacaClient();
+  const symbols = options.symbols ?? defaultConfig.stockPaper.symbols;
+  const timeframe = String(options.timeframe ?? profileSettings.config.timeframe ?? "1Hour");
+  const bars = Number(options.bars ?? profileSettings.config.bars ?? 80);
+  const feed = String(options.feed ?? "iex");
+  const lookbackDays = Number(options.lookbackDays ?? profileSettings.config.lookbackDays ?? 30);
+  const submitOrders = Boolean(options.submitOrders);
+  const maxBuyNotional = Number(
+    options.maxBuyNotional ?? profileSettings.config.maxBuyNotional ?? defaultConfig.paperTraining.maxBuyNotional
+  );
+  const targetRewardRiskRatio = Number(
+    options.targetRewardRiskRatio ??
+    profileSettings.config.targetRewardRiskRatio ??
+    defaultConfig.paperTraining.targetRewardRiskRatio
+  );
+  const writeDatabase = options.writeDatabase ?? true;
+  const exportLedger = options.exportLedger ?? true;
+  const exportOutDir = options.exportOutDir || "reports/paper-ledger";
+  const exportLimit = Number(options.exportLimit ?? 500);
+  const syncStatus = options.syncStatus || "all";
+  const syncLimit = Number(options.syncLimit ?? 100);
+  const syncActivityDays = Number(options.syncActivityDays ?? 7);
+  const now = options.now || new Date();
+  const preflightDatabase = options.preflightDatabase ?? assertSchedulerDatabaseReady;
+  const runPaperLoop = options.runPaperLoop || runAlpacaPaperLoop;
+  const writePaperRun = options.writePaperRun || writeAlpacaPaperRunToDatabase;
+  const syncPaperState = options.syncPaperState || syncAlpacaPaperState;
+  const writeSync = options.writeSync || writeAlpacaSyncToDatabase;
+  const exportPaperLedgerFn = options.exportPaperLedgerFn || exportPaperLedger;
 
   const startedAt = now.toISOString();
   const normalizedSymbols = normalizeSymbols(symbols);
@@ -39,7 +48,11 @@ export async function runStockPaperCycle(options = {}) {
     cycleId: `${startedAt.replace(/[:.]/g, "-")}-stock-paper-cycle`,
     startedAt,
     mode: "stock-paper-cycle",
+    profile: profileSettings.name,
     symbols: normalizedSymbols,
+    timeframe,
+    bars,
+    lookbackDays,
     submitted: Boolean(submitOrders),
     writeDatabase: Boolean(writeDatabase),
     exportLedger: Boolean(exportLedger),
@@ -54,6 +67,7 @@ export async function runStockPaperCycle(options = {}) {
   const paperRun = await runPaperLoop({
     client,
     symbols: normalizedSymbols,
+    profile: profileSettings.name,
     timeframe,
     bars,
     feed,
@@ -129,7 +143,9 @@ export function formatStockPaperCycle(cycle) {
   lines.push("===========================");
   lines.push(`Cycle ID:      ${cycle.cycleId}`);
   lines.push(`Mode:          ${cycle.submitted ? "submitted paper orders" : "decision/log only"}`);
+  lines.push(`Profile:       ${cycle.profile || "standard"}`);
   lines.push(`Symbols:       ${cycle.symbols.join(", ")}`);
+  lines.push(`Timeframe:     ${cycle.timeframe || "n/a"}`);
   lines.push(`Database:      ${cycle.writeDatabase ? "required + written" : "off"}`);
   lines.push(`Excel export:  ${cycle.exportLedger ? "written" : "off"}`);
   lines.push(`Paper run:     ${paperRun.runId || "n/a"}`);

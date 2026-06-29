@@ -1,28 +1,35 @@
 import { defaultConfig } from "../config/default.js";
 import { createPaperMarketOrderFromRiskOrder } from "../integrations/alpaca-client.js";
 import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
+import { getPaperTrainingProfile } from "./paper-training-profile.js";
 import { Portfolio } from "./portfolio.js";
 import { RiskEngine } from "./risk-engine.js";
 
 export async function runAlpacaPaperLoop({
   client,
   symbols = defaultConfig.stockPaper.symbols,
-  timeframe = "1Hour",
-  bars = 80,
+  timeframe,
+  bars,
   feed = "iex",
-  lookbackDays = 30,
+  lookbackDays,
   submitOrders = false,
   maxBuyNotional,
   targetRewardRiskRatio,
   config = defaultConfig,
+  profile = config.paperTraining?.defaultProfile || "standard",
   now = new Date()
 }) {
+  const profileSettings = getPaperTrainingProfile(config, profile);
+  const runTimeframe = String(timeframe ?? profileSettings.config.timeframe ?? "1Hour");
+  const runBars = Number(bars ?? profileSettings.config.bars ?? 80);
+  const runLookbackDays = Number(lookbackDays ?? profileSettings.config.lookbackDays ?? 30);
   const runConfig = createPaperTrainingConfig(config, {
+    profile: profileSettings.name,
     maxBuyNotional,
     targetRewardRiskRatio
   });
   const createdAt = now.toISOString();
-  const start = new Date(now.getTime() - Number(lookbackDays) * 24 * 60 * 60 * 1000).toISOString();
+  const start = new Date(now.getTime() - runLookbackDays * 24 * 60 * 60 * 1000).toISOString();
   const runId = createRunId(createdAt);
   const requestedSymbols = normalizeSymbols(symbols);
 
@@ -38,8 +45,8 @@ export async function runAlpacaPaperLoop({
 
   const barPayload = await getStockBarsForSymbols(client, {
     symbols: normalizedSymbols,
-    timeframe,
-    bars,
+    timeframe: runTimeframe,
+    bars: runBars,
     feed,
     start,
     end: createdAt
@@ -47,7 +54,7 @@ export async function runAlpacaPaperLoop({
 
   const alpacaBars = normalizeAlpacaBars(barPayload, {
     feed,
-    timeframe
+    timeframe: runTimeframe
   });
   const barsBySymbol = groupBarsBySymbol(alpacaBars);
   const portfolio = createPortfolioFromAlpaca(account, positions);
@@ -176,12 +183,13 @@ export async function runAlpacaPaperLoop({
     runId,
     createdAt,
     mode: "alpaca-paper",
+    profile: runConfig.paperTraining.profile,
     requestedSymbols,
     symbols: normalizedSymbols,
     addedPositionSymbols,
-    timeframe,
+    timeframe: runTimeframe,
     feed,
-    lookbackDays,
+    lookbackDays: runLookbackDays,
     submitted: submitOrders,
     maxBuyNotional: runConfig.paperTraining.maxBuyNotional,
     targetRewardRiskRatio: runConfig.paperTraining.targetRewardRiskRatio,
@@ -243,6 +251,7 @@ export function formatAlpacaPaperLoop(run) {
       : "submitted paper orders"
     : "decision/log only";
   lines.push(`Mode:          ${mode}`);
+  lines.push(`Profile:       ${run.profile || "standard"}`);
   lines.push(`Symbols:       ${run.symbols.join(", ")}`);
   if (run.addedPositionSymbols?.length) {
     lines.push(`Added exits:   ${run.addedPositionSymbols.join(", ")}`);
@@ -333,37 +342,50 @@ function estimateRequestRisk(request, riskOrder) {
 function createPaperTrainingConfig(config, overrides = {}) {
   const training = config.paperTraining || {};
   const trainingRisk = training.risk || {};
+  const profile = getPaperTrainingProfile(config, overrides.profile || training.defaultProfile || "standard");
+  const profileConfig = profile.config || {};
+  const profileRisk = profileConfig.risk || {};
+  const profileStrategy = profileConfig.strategy || {};
+  const targetRewardRiskRatio = Number(
+    overrides.targetRewardRiskRatio ??
+    profileConfig.targetRewardRiskRatio ??
+    training.targetRewardRiskRatio ??
+    config.strategy.momentumBreakout.takeProfitRR ??
+    2.5
+  );
   const strategy = {
     ...config.strategy,
     momentumBreakout: {
       ...config.strategy.momentumBreakout,
       ...(training.strategy || {}),
-      takeProfitRR: Number(
-        overrides.targetRewardRiskRatio ||
-        training.targetRewardRiskRatio ||
-        config.strategy.momentumBreakout.takeProfitRR ||
-        2.5
-      )
+      ...profileStrategy,
+      takeProfitRR: targetRewardRiskRatio
     }
   };
   const risk = {
     ...config.risk,
     ...trainingRisk,
+    ...profileRisk,
     maxSpreadBps: {
       ...config.risk.maxSpreadBps,
-      ...(trainingRisk.maxSpreadBps || {})
+      ...(trainingRisk.maxSpreadBps || {}),
+      ...(profileRisk.maxSpreadBps || {})
     },
     minVolume: {
       ...config.risk.minVolume,
-      ...(trainingRisk.minVolume || {})
+      ...(trainingRisk.minVolume || {}),
+      ...(profileRisk.minVolume || {})
     },
     maxAssetClassExposurePct: {
       ...config.risk.maxAssetClassExposurePct,
-      ...(trainingRisk.maxAssetClassExposurePct || {})
+      ...(trainingRisk.maxAssetClassExposurePct || {}),
+      ...(profileRisk.maxAssetClassExposurePct || {})
     },
     targetRiskPerTradeDollars: Number(
-      training.targetRiskPerTradeDollars ||
-      trainingRisk.targetRiskPerTradeDollars ||
+      profileConfig.targetRiskPerTradeDollars ??
+      profileRisk.targetRiskPerTradeDollars ??
+      training.targetRiskPerTradeDollars ??
+      trainingRisk.targetRiskPerTradeDollars ??
       0
     ),
     targetRewardRiskRatio: strategy.momentumBreakout.takeProfitRR
@@ -375,7 +397,8 @@ function createPaperTrainingConfig(config, overrides = {}) {
     risk,
     paperTraining: {
       ...training,
-      maxBuyNotional: Number(overrides.maxBuyNotional || training.maxBuyNotional || 100),
+      profile: profile.name,
+      maxBuyNotional: Number(overrides.maxBuyNotional ?? profileConfig.maxBuyNotional ?? training.maxBuyNotional ?? 100),
       targetRewardRiskRatio: strategy.momentumBreakout.takeProfitRR,
       targetRiskPerTradeDollars: risk.targetRiskPerTradeDollars
     }

@@ -36,6 +36,7 @@ export async function writeAlpacaPaperRunToDatabase(run, options = {}) {
 
 async function upsertLiveRun(client, run) {
   const metadata = {
+    profile: run.profile || "standard",
     symbols: run.symbols,
     timeframe: run.timeframe,
     feed: run.feed,

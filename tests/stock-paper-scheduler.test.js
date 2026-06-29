@@ -127,3 +127,45 @@ test("runStockPaperCycle can run in decision-only mode without database or expor
   assert.equal(cycle.steps.paperLoop.database, null);
   assert.equal(cycle.steps.export.result, null);
 });
+
+test("runStockPaperCycle applies scalp profile defaults", async () => {
+  const cycle = await runStockPaperCycle({
+    profile: "scalp",
+    symbols: "tsla",
+    submitOrders: false,
+    writeDatabase: false,
+    exportLedger: false,
+    now: new Date("2026-01-01T12:00:00Z"),
+    runPaperLoop: async (options) => {
+      assert.equal(options.profile, "scalp");
+      assert.equal(options.timeframe, "5Min");
+      assert.equal(options.bars, 120);
+      assert.equal(options.lookbackDays, 5);
+      assert.equal(options.maxBuyNotional, 100);
+      assert.equal(options.targetRewardRiskRatio, 1.3);
+      return {
+        runId: "paper-scalp",
+        summary: {
+          signals: 1,
+          actionableSignals: 0,
+          approvedRiskDecisions: 0,
+          rejectedRiskDecisions: 0,
+          orders: 0,
+          submittedOrders: 0
+        }
+      };
+    },
+    syncPaperState: async () => ({
+      runId: "sync-scalp",
+      summary: {
+        positions: 0,
+        orders: 0,
+        fills: 0
+      }
+    })
+  });
+
+  assert.equal(cycle.profile, "scalp");
+  assert.equal(cycle.timeframe, "5Min");
+  assert.match(formatStockPaperCycle(cycle), /Profile:\s+scalp/);
+});

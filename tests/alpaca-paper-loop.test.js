@@ -190,6 +190,49 @@ test("runAlpacaPaperLoop fetches recent bars one stock at a time", async () => {
   assert.equal(run.signals.every((signal) => signal.reason !== "no Alpaca bars returned"), true);
 });
 
+test("runAlpacaPaperLoop applies scalp profile defaults", async () => {
+  const requested = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "500",
+        buying_power: "500",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [];
+    },
+    async getStockBars(options) {
+      requested.push(options);
+      return {
+        bars: {
+          TSLA: createFlatBars("TSLA")
+        }
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    profile: "scalp",
+    symbols: ["TSLA"],
+    submitOrders: false,
+    now: new Date("2026-01-10T12:00:00Z")
+  });
+
+  assert.equal(run.profile, "scalp");
+  assert.equal(run.timeframe, "5Min");
+  assert.equal(run.lookbackDays, 5);
+  assert.equal(run.maxBuyNotional, 100);
+  assert.equal(run.targetRewardRiskRatio, 1.3);
+  assert.equal(requested[0].timeframe, "5Min");
+  assert.equal(requested[0].limit, 120);
+  assert.equal(requested[0].start, "2026-01-05T12:00:00.000Z");
+});
+
 test("runAlpacaPaperLoop monitors open positions even outside requested basket", async () => {
   const requested = [];
   const client = {
