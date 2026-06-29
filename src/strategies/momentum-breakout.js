@@ -50,9 +50,14 @@ export class MomentumBreakoutStrategy {
 
     if (currentPosition) {
       const profitPct = bar.close / currentPosition.avgPrice - 1;
+      const stopPrice = currentPosition.avgPrice * (1 - this.stopLossPct);
+      const targetPrice = currentPosition.avgPrice * (1 + this.stopLossPct * this.takeProfitRR);
       const trendFailed = fastSma < slowSma;
-      const stopFailed = profitPct <= -this.stopLossPct;
-      const targetHit = profitPct >= this.stopLossPct * this.takeProfitRR;
+      const stopFailed = profitPct <= -this.stopLossPct || Number(bar.low) <= stopPrice;
+      const targetHit = !stopFailed && (
+        profitPct >= this.stopLossPct * this.takeProfitRR ||
+        Number(bar.high) >= targetPrice
+      );
       const giveBack = profitPct > this.stopLossPct * 1.8 && bar.close < fastSma;
 
       if (trendFailed || stopFailed || targetHit || giveBack) {
@@ -60,11 +65,13 @@ export class MomentumBreakoutStrategy {
           action: "SELL",
           symbol: bar.symbol,
           assetClass: bar.assetClass,
+          stopPrice,
+          targetPrice,
           confidence: 0.8,
           reason: stopFailed
-            ? `stop loss at ${(profitPct * 100).toFixed(2)}%`
+            ? `stop loss at ${round(stopPrice)}`
             : targetHit
-              ? `take profit at ${(profitPct / this.stopLossPct).toFixed(2)}R`
+              ? `take profit at ${round(targetPrice)} (${this.takeProfitRR.toFixed(2)}R)`
               : "momentum exit"
         };
       }

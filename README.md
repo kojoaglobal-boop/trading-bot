@@ -156,6 +156,8 @@ node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper 
 
 The paper loop also adds any existing open Alpaca paper positions to the monitored symbol list. That keeps exit checks active even if a symbol is accidentally left out of the requested basket.
 
+Open stock positions are protected by the strategy using intrabar stop and target checks. If the same bar touches both levels, the bot treats the stop as hit first so paper results stay conservative.
+
 Sync the Alpaca paper broker state into Postgres:
 
 ```powershell
