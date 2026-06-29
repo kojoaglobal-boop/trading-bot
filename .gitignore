@@ -1,5 +1,6 @@
 .env
 logs/*.json
 reports/
+share/
 node_modules/
 npm-debug.log*
