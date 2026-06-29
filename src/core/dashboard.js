@@ -244,17 +244,26 @@ async function queryRecentFills(client, limit) {
 
 async function queryLatestPositions(client, limit) {
   const result = await client.query(
-    `SELECT
-      source,
-      snapshot_time,
-      symbol,
-      asset_class,
-      qty,
-      avg_entry_price,
-      market_value,
-      unrealized_pl
-    FROM account_positions
-    ORDER BY snapshot_time DESC, symbol ASC
+    `WITH latest_account AS (
+      SELECT source, snapshot_time
+      FROM account_snapshots
+      ORDER BY snapshot_time DESC
+      LIMIT 1
+    )
+    SELECT
+      p.source,
+      p.snapshot_time,
+      p.symbol,
+      p.asset_class,
+      p.qty,
+      p.avg_entry_price,
+      p.market_value,
+      p.unrealized_pl
+    FROM account_positions p
+    JOIN latest_account a
+      ON p.source = a.source
+      AND p.snapshot_time = a.snapshot_time
+    ORDER BY p.symbol ASC
     LIMIT $1`,
     [Number(limit)]
   );

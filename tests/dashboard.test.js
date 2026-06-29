@@ -8,6 +8,21 @@ test("loadDashboardSnapshot maps trading database state into one dashboard view"
     query(sql, params = []) {
       queries.push({ sql, params });
 
+      if (sql.includes("FROM account_positions")) {
+        return {
+          rows: [{
+            source: "alpaca-paper",
+            snapshot_time: new Date("2026-01-01T12:00:00Z"),
+            symbol: "AAPL",
+            asset_class: "stock",
+            qty: "1",
+            avg_entry_price: "100",
+            market_value: "101",
+            unrealized_pl: "1"
+          }]
+        };
+      }
+
       if (sql.includes("FROM account_snapshots")) {
         return {
           rows: [{
@@ -100,21 +115,6 @@ test("loadDashboardSnapshot maps trading database state into one dashboard view"
         };
       }
 
-      if (sql.includes("FROM account_positions")) {
-        return {
-          rows: [{
-            source: "alpaca-paper",
-            snapshot_time: "2026-01-01T12:00:00Z",
-            symbol: "AAPL",
-            asset_class: "stock",
-            qty: "1",
-            avg_entry_price: "100",
-            market_value: "101",
-            unrealized_pl: "1"
-          }]
-        };
-      }
-
       if (sql.includes("FROM market_bars")) {
         return {
           rows: [{
@@ -172,8 +172,10 @@ test("loadDashboardSnapshot maps trading database state into one dashboard view"
   assert.equal(snapshot.summary.actionableSignals, 1);
   assert.equal(snapshot.summary.approvedRiskDecisions, 1);
   assert.equal(snapshot.summary.openOrders, 1);
+  assert.equal(snapshot.positions.length, 1);
   assert.equal(snapshot.marketData[0].symbol, "XAU/USD");
   assert.equal(snapshot.sources.length, 2);
+  assert.match(queries.find((query) => query.sql.includes("FROM account_positions")).sql, /latest_account/);
   assert.equal(queries.every((query) => query.params.length === 0 || query.params[0] === 5), true);
   assert.match(formatDashboardSnapshot(snapshot), /Trading Bot Dashboard/);
   assert.match(formatDashboardSnapshot(snapshot), /Sources Missing Keys/);
