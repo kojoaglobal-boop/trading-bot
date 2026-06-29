@@ -158,6 +158,8 @@ The paper loop also adds any existing open Alpaca paper positions to the monitor
 
 Open stock positions are protected by the strategy using intrabar stop and target checks. If the same bar touches both levels, the bot treats the stop as hit first so paper results stay conservative.
 
+When paper submission is enabled, the loop checks Alpaca's market clock first. If the stock market is closed, it logs the signals and approved plan but skips order submission.
+
 Sync the Alpaca paper broker state into Postgres:
 
 ```powershell

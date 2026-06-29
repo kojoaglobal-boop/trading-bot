@@ -51,6 +51,29 @@ test("AlpacaClient fetches paper account with Alpaca auth headers", async () => 
   assert.equal(captured.options.headers["APCA-API-SECRET-KEY"], "secret");
 });
 
+test("AlpacaClient fetches paper market clock", async () => {
+  let capturedUrl = "";
+  const client = new AlpacaClient({
+    env: {
+      ALPACA_API_KEY_ID: "key",
+      ALPACA_API_SECRET_KEY: "secret",
+      ALPACA_BASE_URL: "https://paper.example.test"
+    },
+    fetchFn: async (url) => {
+      capturedUrl = String(url);
+      return jsonResponse({
+        is_open: true,
+        timestamp: "2026-01-01T14:30:00Z"
+      });
+    }
+  });
+
+  const clock = await client.getClock();
+
+  assert.equal(clock.is_open, true);
+  assert.equal(capturedUrl, "https://paper.example.test/v2/clock");
+});
+
 test("AlpacaClient fetches latest bars from data API", async () => {
   let capturedUrl = "";
   const client = new AlpacaClient({

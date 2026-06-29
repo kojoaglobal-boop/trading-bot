@@ -42,6 +42,8 @@ async function upsertLiveRun(client, run) {
     lookbackDays: run.lookbackDays,
     bars: run.barsProcessed,
     submitted: run.submitted,
+    orderSubmissionEnabled: run.orderSubmissionEnabled,
+    marketClock: run.marketClock,
     summary: run.summary,
     account: run.account,
     sources: [{

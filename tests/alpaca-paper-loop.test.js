@@ -98,6 +98,58 @@ test("runAlpacaPaperLoop logs signals and can submit capped paper orders", async
   assert.match(formatAlpacaPaperLoop(run), /Alpaca Live-Paper Strategy Loop/);
 });
 
+test("runAlpacaPaperLoop skips paper submission when Alpaca market clock is closed", async () => {
+  let submitCalled = false;
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "500",
+        buying_power: "500",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [];
+    },
+    async getClock() {
+      return {
+        is_open: false,
+        timestamp: "2026-01-01T12:00:00Z",
+        next_open: "2026-01-02T14:30:00Z",
+        next_close: "2026-01-02T21:00:00Z"
+      };
+    },
+    async getStockBars() {
+      return {
+        bars: {
+          TSLA: createBreakoutBars("TSLA")
+        }
+      };
+    },
+    async submitOrder() {
+      submitCalled = true;
+      throw new Error("submitOrder should not be called while market is closed");
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    symbols: ["TSLA"],
+    bars: 30,
+    submitOrders: true,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(submitCalled, false);
+  assert.equal(run.orderSubmissionEnabled, false);
+  assert.equal(run.marketClock.isOpen, false);
+  assert.equal(run.orders[0].status, "skipped-market-closed");
+  assert.equal(run.summary.submittedOrders, 0);
+  assert.match(formatAlpacaPaperLoop(run), /market closed/);
+});
+
 test("runAlpacaPaperLoop fetches recent bars one stock at a time", async () => {
   const requested = [];
   const client = {

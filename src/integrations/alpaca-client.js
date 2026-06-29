@@ -29,6 +29,10 @@ export class AlpacaClient {
     return this.requestJson(`${this.paperBaseUrl}/v2/account`);
   }
 
+  async getClock() {
+    return this.requestJson(`${this.paperBaseUrl}/v2/clock`);
+  }
+
   async getLatestStockBars({ symbols, feed = "iex" }) {
     if (!Array.isArray(symbols) || symbols.length === 0) {
       throw new Error("At least one stock symbol is required.");

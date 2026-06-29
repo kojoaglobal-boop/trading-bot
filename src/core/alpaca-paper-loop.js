@@ -30,6 +30,8 @@ export async function runAlpacaPaperLoop({
     client.getAccount(),
     client.getPositions()
   ]);
+  const marketClock = submitOrders ? await getMarketClock(client) : null;
+  const orderSubmissionEnabled = submitOrders && isMarketOpen(marketClock);
   const openPositionSymbols = normalizeSymbols(positions.map((position) => position.symbol));
   const normalizedSymbols = mergeSymbols(requestedSymbols, openPositionSymbols);
   const addedPositionSymbols = normalizedSymbols.filter((symbol) => !requestedSymbols.includes(symbol));
@@ -146,6 +148,19 @@ export async function runAlpacaPaperLoop({
       continue;
     }
 
+    if (!orderSubmissionEnabled) {
+      orders.push({
+        status: "skipped-market-closed",
+        assetClass: latestBar.assetClass,
+        request,
+        requestRisk,
+        riskOrder: riskResult.order,
+        skipped: true,
+        reason: "market closed"
+      });
+      continue;
+    }
+
     const submitted = await client.submitOrder(request);
     orders.push({
       status: submitted.status || "submitted",
@@ -171,6 +186,8 @@ export async function runAlpacaPaperLoop({
     maxBuyNotional: runConfig.paperTraining.maxBuyNotional,
     targetRewardRiskRatio: runConfig.paperTraining.targetRewardRiskRatio,
     targetRiskPerTradeDollars: runConfig.paperTraining.targetRiskPerTradeDollars,
+    marketClock: normalizeMarketClock(marketClock),
+    orderSubmissionEnabled,
     account: normalizeAccount(account),
     rawAccount: account,
     positions: positions.map(normalizeAlpacaPosition),
@@ -184,7 +201,7 @@ export async function runAlpacaPaperLoop({
       approvedRiskDecisions: riskDecisions.filter((decision) => decision.approved).length,
       rejectedRiskDecisions: riskDecisions.filter((decision) => !decision.approved).length,
       orders: orders.length,
-      submittedOrders: orders.filter((order) => order.status !== "planned").length
+      submittedOrders: orders.filter((order) => Boolean(order.submitted)).length
     }
   };
 }
@@ -220,7 +237,12 @@ export function formatAlpacaPaperLoop(run) {
   lines.push("Alpaca Live-Paper Strategy Loop");
   lines.push("===============================");
   lines.push(`Run ID:        ${run.runId}`);
-  lines.push(`Mode:          ${run.submitted ? "submitted paper orders" : "decision/log only"}`);
+  const mode = run.submitted
+    ? run.orderSubmissionEnabled === false
+      ? "paper submission skipped (market closed)"
+      : "submitted paper orders"
+    : "decision/log only";
+  lines.push(`Mode:          ${mode}`);
   lines.push(`Symbols:       ${run.symbols.join(", ")}`);
   if (run.addedPositionSymbols?.length) {
     lines.push(`Added exits:   ${run.addedPositionSymbols.join(", ")}`);
@@ -228,6 +250,9 @@ export function formatAlpacaPaperLoop(run) {
   lines.push(`Timeframe:     ${run.timeframe}`);
   lines.push(`Feed:          ${run.feed}`);
   lines.push(`Lookback days: ${run.lookbackDays}`);
+  if (run.marketClock) {
+    lines.push(`Market open:   ${run.marketClock.isOpen ? "yes" : "no"}`);
+  }
   lines.push(`Bars:          ${run.barsProcessed}`);
   lines.push(`Max buy size:  ${money(run.maxBuyNotional)}`);
   lines.push(`Target R/R:    1:${Number(run.targetRewardRiskRatio || 0).toFixed(2)}`);
@@ -272,6 +297,18 @@ export function formatAlpacaPaperLoop(run) {
   }
 
   return lines.join("\n");
+}
+
+async function getMarketClock(client) {
+  if (typeof client.getClock !== "function") {
+    return null;
+  }
+
+  return client.getClock();
+}
+
+function isMarketOpen(marketClock) {
+  return !marketClock || marketClock.is_open === true;
 }
 
 function estimateRequestRisk(request, riskOrder) {
@@ -404,6 +441,19 @@ function normalizeAccount(account) {
     buyingPower: Number(account.buying_power || 0),
     portfolioValue: Number(account.portfolio_value || 0),
     patternDayTrader: Boolean(account.pattern_day_trader)
+  };
+}
+
+function normalizeMarketClock(clock) {
+  if (!clock) {
+    return null;
+  }
+
+  return {
+    isOpen: Boolean(clock.is_open),
+    timestamp: clock.timestamp ? new Date(clock.timestamp).toISOString() : null,
+    nextOpen: clock.next_open ? new Date(clock.next_open).toISOString() : null,
+    nextClose: clock.next_close ? new Date(clock.next_close).toISOString() : null
   };
 }
 
