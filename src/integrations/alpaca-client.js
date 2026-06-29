@@ -456,7 +456,7 @@ function formatQty(value) {
   if (!Number.isFinite(number) || number <= 0) {
     throw new Error("Order quantity must be positive.");
   }
-  return number.toFixed(6).replace(/\.?0+$/, "");
+  return number.toFixed(9).replace(/\.?0+$/, "");
 }
 
 function money(value) {

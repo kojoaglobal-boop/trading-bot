@@ -24,20 +24,24 @@ export async function runAlpacaPaperLoop({
   const createdAt = now.toISOString();
   const start = new Date(now.getTime() - Number(lookbackDays) * 24 * 60 * 60 * 1000).toISOString();
   const runId = createRunId(createdAt);
-  const normalizedSymbols = normalizeSymbols(symbols);
+  const requestedSymbols = normalizeSymbols(symbols);
 
-  const [account, positions, barPayload] = await Promise.all([
+  const [account, positions] = await Promise.all([
     client.getAccount(),
-    client.getPositions(),
-    getStockBarsForSymbols(client, {
-      symbols: normalizedSymbols,
-      timeframe,
-      bars,
-      feed,
-      start,
-      end: createdAt
-    })
+    client.getPositions()
   ]);
+  const openPositionSymbols = normalizeSymbols(positions.map((position) => position.symbol));
+  const normalizedSymbols = mergeSymbols(requestedSymbols, openPositionSymbols);
+  const addedPositionSymbols = normalizedSymbols.filter((symbol) => !requestedSymbols.includes(symbol));
+
+  const barPayload = await getStockBarsForSymbols(client, {
+    symbols: normalizedSymbols,
+    timeframe,
+    bars,
+    feed,
+    start,
+    end: createdAt
+  });
 
   const alpacaBars = normalizeAlpacaBars(barPayload, {
     feed,
@@ -157,7 +161,9 @@ export async function runAlpacaPaperLoop({
     runId,
     createdAt,
     mode: "alpaca-paper",
+    requestedSymbols,
     symbols: normalizedSymbols,
+    addedPositionSymbols,
     timeframe,
     feed,
     lookbackDays,
@@ -216,6 +222,9 @@ export function formatAlpacaPaperLoop(run) {
   lines.push(`Run ID:        ${run.runId}`);
   lines.push(`Mode:          ${run.submitted ? "submitted paper orders" : "decision/log only"}`);
   lines.push(`Symbols:       ${run.symbols.join(", ")}`);
+  if (run.addedPositionSymbols?.length) {
+    lines.push(`Added exits:   ${run.addedPositionSymbols.join(", ")}`);
+  }
   lines.push(`Timeframe:     ${run.timeframe}`);
   lines.push(`Feed:          ${run.feed}`);
   lines.push(`Lookback days: ${run.lookbackDays}`);
@@ -428,6 +437,20 @@ function normalizeSymbols(symbols) {
     .split(",")
     .map((symbol) => symbol.trim().toUpperCase())
     .filter(Boolean);
+}
+
+function mergeSymbols(primary, secondary) {
+  const seen = new Set();
+  const merged = [];
+
+  for (const symbol of [...primary, ...secondary]) {
+    if (!seen.has(symbol)) {
+      seen.add(symbol);
+      merged.push(symbol);
+    }
+  }
+
+  return merged;
 }
 
 function mapAlpacaAssetClass(assetClass) {

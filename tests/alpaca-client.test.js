@@ -279,11 +279,11 @@ test("risk orders convert to capped Alpaca paper market orders", () => {
     order: {
       symbol: "TSLA",
       side: "SELL",
-      quantity: 1.25,
+      quantity: 0.252221028,
       expectedPrice: 250
     },
     maxBuyNotional: 5
-  }).qty, "1.25");
+  }).qty, "0.252221028");
 });
 
 test("loop paper orders allow training-size notional while manual tiny orders stay capped", async () => {

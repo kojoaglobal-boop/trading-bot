@@ -138,6 +138,50 @@ test("runAlpacaPaperLoop fetches recent bars one stock at a time", async () => {
   assert.equal(run.signals.every((signal) => signal.reason !== "no Alpaca bars returned"), true);
 });
 
+test("runAlpacaPaperLoop monitors open positions even outside requested basket", async () => {
+  const requested = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "400",
+        buying_power: "400",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [{
+        symbol: "TSLA",
+        asset_class: "us_equity",
+        qty: "0.252221028",
+        avg_entry_price: "396.44"
+      }];
+    },
+    async getStockBars(options) {
+      requested.push(options.symbols[0]);
+      return {
+        bars: {
+          [options.symbols[0]]: createFlatBars(options.symbols[0])
+        }
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    symbols: ["AAPL", "NVDA"],
+    bars: 30,
+    submitOrders: false,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.deepEqual(requested, ["AAPL", "NVDA", "TSLA"]);
+  assert.deepEqual(run.addedPositionSymbols, ["TSLA"]);
+  assert.deepEqual(run.symbols, ["AAPL", "NVDA", "TSLA"]);
+  assert.match(formatAlpacaPaperLoop(run), /Added exits:\s+TSLA/);
+});
+
 function createBreakoutBars(symbol) {
   const bars = [];
   let close = 100;

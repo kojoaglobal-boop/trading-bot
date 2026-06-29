@@ -154,6 +154,8 @@ To let that loop submit paper orders, add the explicit paper confirmation. The p
 node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
 ```
 
+The paper loop also adds any existing open Alpaca paper positions to the monitored symbol list. That keeps exit checks active even if a symbol is accidentally left out of the requested basket.
+
 Sync the Alpaca paper broker state into Postgres:
 
 ```powershell
