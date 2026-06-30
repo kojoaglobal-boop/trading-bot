@@ -61,6 +61,17 @@ export const sourceCatalog = [
     purpose: "Crypto spot, derivatives, and WebSocket data."
   },
   {
+    id: "capital",
+    label: "Capital.com",
+    kind: "broker-and-data",
+    mode: "demo-or-live",
+    covers: ["gold", "forex"],
+    requiredEnv: ["CAPITAL_IDENTIFIER", "CAPITAL_API_KEY", "CAPITAL_PASSWORD"],
+    optionalEnv: ["CAPITAL_ENV", "CAPITAL_BASE_URL"],
+    cost: "demo available; spreads and overnight financing apply live",
+    purpose: "Gold/XAU/USD and forex CFD data through the Capital.com public API."
+  },
+  {
     id: "oanda",
     label: "OANDA",
     kind: "broker-and-data",

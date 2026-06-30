@@ -60,3 +60,12 @@ test("source catalog includes Finnhub as a stock catalyst source", () => {
   assert.deepEqual(finnhub.requiredEnv, ["FINNHUB_API_KEY"]);
   assert.deepEqual(finnhub.covers, ["stock"]);
 });
+
+test("source catalog includes Capital.com as a gold and forex source", () => {
+  const capital = sourceCatalog.find((source) => source.id === "capital");
+
+  assert.equal(capital.kind, "broker-and-data");
+  assert.equal(capital.mode, "demo-or-live");
+  assert.deepEqual(capital.requiredEnv, ["CAPITAL_IDENTIFIER", "CAPITAL_API_KEY", "CAPITAL_PASSWORD"]);
+  assert.deepEqual(capital.covers, ["gold", "forex"]);
+});

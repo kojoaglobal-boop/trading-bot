@@ -19,6 +19,7 @@ import { formatAlpacaPaperLoop, runAlpacaPaperLoop } from "./core/alpaca-paper-l
 import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./core/alpaca-sync.js";
 import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
 import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
+import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
@@ -49,6 +50,11 @@ import {
   formatPositions,
   formatSmokeOrderResult
 } from "./integrations/alpaca-client.js";
+import {
+  CapitalClient,
+  formatCapitalAccounts,
+  formatCapitalMarkets
+} from "./integrations/capital-client.js";
 import {
   formatOandaAccountSummary,
   formatOandaInstruments,
@@ -138,6 +144,8 @@ try {
     await runCryptoCommand(args);
   } else if (command === "gold") {
     await runGoldCommand(args);
+  } else if (command === "capital") {
+    await runCapitalCommand(args);
   } else if (command === "oanda") {
     await runOandaCommand(args);
   } else if (command === "finnhub") {
@@ -393,10 +401,15 @@ async function runGoldCommand(args) {
   const subcommand = args._[1] || "paper-cycle";
 
   if (subcommand === "paper-cycle") {
+    const provider = args.provider ? String(args.provider).toLowerCase() : undefined;
+    const defaultInstrument = provider === "capital" ? "GOLD" : "XAU_USD";
     const cycle = await runGoldPaperCycle({
       sample: Boolean(args.sample),
-      instrument: String(args.instrument || "XAU_USD"),
+      instrument: String(args.instrument || args.epic || defaultInstrument),
+      epic: args.epic ? String(args.epic) : undefined,
+      provider,
       granularity: String(args.granularity || "M5"),
+      resolution: args.resolution ? String(args.resolution) : undefined,
       count: Number(args.count || args.limit || 300),
       seed: Number(args.seed || 42),
       writeDatabase: !args["no-db"],
@@ -414,6 +427,57 @@ async function runGoldCommand(args) {
   node src/cli.js gold paper-cycle --sample --no-db
   node src/cli.js gold paper-cycle --sample
   node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
+  node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5
+`);
+}
+
+async function runCapitalCommand(args) {
+  const subcommand = args._[1] || "help";
+  const client = new CapitalClient();
+
+  if (subcommand === "account" || subcommand === "accounts") {
+    const accounts = await client.getAccounts();
+    console.log(formatCapitalAccounts(accounts));
+    return;
+  }
+
+  if (subcommand === "markets") {
+    const markets = await client.getMarkets({
+      searchTerm: String(args.search || args.searchTerm || args["search-term"] || "gold")
+    });
+    console.log(formatCapitalMarkets(markets, {
+      limit: Number(args.limit || 30)
+    }));
+    return;
+  }
+
+  if (subcommand === "prices") {
+    const result = await fetchCapitalPrices({
+      client,
+      epic: String(args.epic || "GOLD"),
+      resolution: String(args.resolution || args.granularity || "MINUTE_5"),
+      count: Number(args.count || args.limit || 120),
+      from: args.from,
+      to: args.to,
+      symbol: args.symbol ? String(args.symbol).toUpperCase() : undefined
+    });
+
+    console.log(formatCapitalMarketData(result));
+
+    if (args.db) {
+      const stored = await upsertMarketBars(result.bars);
+      console.log(`Database market bars: ${stored.bars} bars (${stored.symbols.join(", ")}) from ${stored.sources.join(", ")}`);
+    }
+    return;
+  }
+
+  console.log(`Capital.com Commands
+====================
+  node src/cli.js capital account
+  node src/cli.js capital markets --search gold
+  node src/cli.js capital markets --search xau
+  node src/cli.js capital prices --epic GOLD --resolution MINUTE_5
+  node src/cli.js capital prices --epic GOLD --resolution MINUTE_5 --db
 `);
 }
 

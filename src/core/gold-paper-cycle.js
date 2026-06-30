@@ -2,6 +2,7 @@ import { defaultConfig } from "../config/default.js";
 import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
 import { createAuditRecord } from "./audit-log.js";
 import { runBacktest } from "./backtester.js";
+import { fetchCapitalPrices } from "./capital-market-data.js";
 import { writeAuditToDatabase } from "./database-journal.js";
 import { upsertMarketBars } from "./database-market-data.js";
 import { createSampleBars } from "./market-data.js";
@@ -11,19 +12,23 @@ import { Portfolio } from "./portfolio.js";
 import { RiskEngine } from "./risk-engine.js";
 
 export async function runGoldPaperCycle(options = {}) {
-  const mode = options.sample ? "gold-paper-sample" : "gold-paper-oanda";
-  const instrument = String(options.instrument || "XAU_USD").trim().toUpperCase();
-  const granularity = String(options.granularity || "M5").trim().toUpperCase();
+  const provider = options.sample ? "sample" : String(options.provider || "oanda").trim().toLowerCase();
+  const mode = `gold-paper-${provider}`;
+  const instrument = String(options.instrument || options.epic || defaultInstrumentForProvider(provider)).trim().toUpperCase();
+  const granularity = String(options.granularity || options.resolution || "M5").trim().toUpperCase();
   const count = Number(options.count || 300);
   const writeDatabase = options.writeDatabase ?? true;
   const now = options.now || new Date();
   const bars = options.bars || await loadGoldBars({
     sample: Boolean(options.sample),
+    provider,
     instrument,
     granularity,
     count,
     seed: Number(options.seed || 42),
-    client: options.client
+    client: options.client,
+    capitalClient: options.capitalClient,
+    symbol: options.symbol
   });
 
   const report = runBacktest({
@@ -115,11 +120,14 @@ export function formatGoldPaperCycle(cycle) {
 
 async function loadGoldBars({
   sample,
+  provider,
   instrument,
   granularity,
   count,
   seed,
-  client
+  client,
+  capitalClient,
+  symbol
 }) {
   if (sample) {
     return createSampleBars({
@@ -133,6 +141,17 @@ async function loadGoldBars({
     });
   }
 
+  if (provider === "capital") {
+    const result = await fetchCapitalPrices({
+      epic: instrument,
+      resolution: granularity,
+      count,
+      symbol: symbol || "XAU/USD",
+      client: capitalClient || client
+    });
+    return result.bars;
+  }
+
   const result = await fetchOandaCandles({
     instrument,
     granularity,
@@ -141,6 +160,10 @@ async function loadGoldBars({
     client
   });
   return result.bars;
+}
+
+function defaultInstrumentForProvider(provider) {
+  return provider === "capital" ? "GOLD" : "XAU_USD";
 }
 
 function createGoldStrategyConfig(options) {

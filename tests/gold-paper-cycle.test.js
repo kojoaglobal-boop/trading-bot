@@ -45,6 +45,33 @@ test("runGoldPaperCycle can use OANDA candle data when a client is configured", 
   assert.equal(cycle.report.sources[0].provider, "oanda");
 });
 
+test("runGoldPaperCycle can use Capital.com GOLD price data", async () => {
+  const cycle = await runGoldPaperCycle({
+    provider: "capital",
+    epic: "GOLD",
+    granularity: "M5",
+    count: 30,
+    writeDatabase: false,
+    client: {
+      environment: "demo",
+      async getPrices(params) {
+        assert.equal(params.epic, "GOLD");
+        assert.equal(params.resolution, "MINUTE_5");
+        assert.equal(params.max, 30);
+        return {
+          prices: createCapitalGoldPrices()
+        };
+      }
+    },
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(cycle.mode, "gold-paper-capital");
+  assert.equal(cycle.bars[0].symbol, "XAU/USD");
+  assert.equal(cycle.bars[0].assetClass, "gold");
+  assert.equal(cycle.report.sources[0].provider, "capital");
+});
+
 test("gold sample bars use gold-scale prices", () => {
   const bars = createSampleBars({
     symbols: [{
@@ -102,5 +129,28 @@ function createOandaGoldCandles() {
       l: String(bar.low + 0.2),
       c: String(bar.close + 0.2)
     }
+  }));
+}
+
+function createCapitalGoldPrices() {
+  return createBreakoutGoldBars().map((bar) => ({
+    snapshotTimeUTC: bar.time.replace(".000Z", ""),
+    openPrice: {
+      bid: String(bar.open - 0.2),
+      ask: String(bar.open + 0.2)
+    },
+    highPrice: {
+      bid: String(bar.high - 0.2),
+      ask: String(bar.high + 0.2)
+    },
+    lowPrice: {
+      bid: String(bar.low - 0.2),
+      ask: String(bar.low + 0.2)
+    },
+    closePrice: {
+      bid: String(bar.close - 0.2),
+      ask: String(bar.close + 0.2)
+    },
+    lastTradedVolume: bar.volume
   }));
 }

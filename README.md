@@ -229,10 +229,11 @@ node src/cli.js scheduler run-once --profile scalp --symbols TSLA,NVDA,AMD,PLTR 
 node src/cli.js scheduler run-once --profile scalp --no-catalysts --confirm-paper
 ```
 
-Pull Gold/USD candles through OANDA practice:
+Pull Gold/USD markets through Capital.com demo:
 
 ```powershell
-node src/cli.js oanda candles --instrument XAU_USD --db
+node src/cli.js capital markets --search gold
+node src/cli.js capital prices --epic GOLD --resolution MINUTE_5 --db
 ```
 
 Run a Gold/USD paper cycle with deterministic sample data now:
@@ -241,15 +242,31 @@ Run a Gold/USD paper cycle with deterministic sample data now:
 node src/cli.js gold paper-cycle --sample
 ```
 
-Run the same Gold/USD paper cycle with OANDA practice market data once the API token is in `.env`:
+Run the same Gold/USD paper cycle with Capital.com demo market data once the API details are in `.env`:
+
+```powershell
+node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5
+```
+
+OANDA remains a fallback if its API access gets fixed:
 
 ```powershell
 node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
 ```
 
-The Gold/USD cycle is still paper research only. It fetches or generates XAU/USD bars, runs the strategy, applies the risk engine, simulates fills, writes market bars and audit results to Postgres, and does not place OANDA trades yet.
+The Gold/USD cycle is still paper research only. It fetches or generates XAU/USD bars, runs the strategy, applies the risk engine, simulates fills, writes market bars and audit results to Postgres, and does not place Capital.com or OANDA trades yet.
 
-OANDA credentials needed in `.env`:
+Capital.com demo details needed in `.env`:
+
+```text
+CAPITAL_IDENTIFIER=
+CAPITAL_API_KEY=
+CAPITAL_PASSWORD=
+CAPITAL_ENV=demo
+CAPITAL_BASE_URL=https://demo-api-capital.backend-capital.com
+```
+
+OANDA fallback credentials in `.env`:
 
 ```text
 OANDA_ACCOUNT_ID=
@@ -260,6 +277,8 @@ OANDA_ENV=practice
 Check the practice account and confirm XAU/USD is tradable:
 
 ```powershell
+node src/cli.js capital account
+node src/cli.js capital markets --search xau
 node src/cli.js oanda account
 node src/cli.js oanda instruments
 ```
