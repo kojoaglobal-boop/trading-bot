@@ -382,6 +382,55 @@ test("runAlpacaPaperLoop monitors open positions even outside requested basket",
   assert.match(formatAlpacaPaperLoop(run), /Added exits:\s+TSLA/);
 });
 
+test("runAlpacaPaperLoop scans a broad basket and trades the ranked shortlist", async () => {
+  const requested = [];
+  const client = {
+    async getAccount() {
+      return {
+        id: "acct-1",
+        status: "ACTIVE",
+        cash: "500",
+        buying_power: "500",
+        portfolio_value: "500"
+      };
+    },
+    async getPositions() {
+      return [];
+    },
+    async getStockBars(options) {
+      requested.push(options.symbols[0]);
+      const symbol = options.symbols[0];
+      return {
+        bars: {
+          [symbol]: symbol === "FAST"
+            ? createBreakoutBars(symbol)
+            : createFlatBars(symbol)
+        }
+      };
+    }
+  };
+
+  const run = await runAlpacaPaperLoop({
+    client,
+    symbols: ["SLOW", "FAST", "FLAT"],
+    bars: 30,
+    submitOrders: false,
+    selection: {
+      enabled: true,
+      maxSelectedSymbols: 1,
+      useFinnhubCatalysts: false
+    },
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.deepEqual(requested, ["SLOW", "FAST", "FLAT"]);
+  assert.deepEqual(run.selection.scannedSymbols, ["SLOW", "FAST", "FLAT"]);
+  assert.deepEqual(run.selection.selectedSymbols, ["FAST"]);
+  assert.deepEqual(run.strategySymbols, ["FAST"]);
+  assert.equal(run.signals.length, 1);
+  assert.equal(run.signals[0].symbol, "FAST");
+});
+
 function createBreakoutBars(symbol) {
   const bars = [];
   let close = 100;

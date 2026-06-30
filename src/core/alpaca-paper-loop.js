@@ -5,6 +5,7 @@ import { checkDailyEntryGuard, createDailyTradingGuard } from "./daily-trading-g
 import { getPaperTrainingProfile } from "./paper-training-profile.js";
 import { Portfolio } from "./portfolio.js";
 import { RiskEngine } from "./risk-engine.js";
+import { selectStockUniverse } from "./stock-universe-selector.js";
 
 export async function runAlpacaPaperLoop({
   client,
@@ -17,6 +18,8 @@ export async function runAlpacaPaperLoop({
   maxBuyNotional,
   targetRewardRiskRatio,
   dailyStartEquity,
+  selection,
+  newsClient,
   config = defaultConfig,
   profile = config.paperTraining?.defaultProfile || "standard",
   now = new Date()
@@ -59,6 +62,20 @@ export async function runAlpacaPaperLoop({
     timeframe: runTimeframe
   });
   const barsBySymbol = groupBarsBySymbol(alpacaBars);
+  const universeSelection = await selectStockUniverse({
+    symbols: normalizedSymbols,
+    barsBySymbol,
+    openPositionSymbols,
+    selection: {
+      ...(runConfig.stockPaper?.selection || {}),
+      ...(selection || {})
+    },
+    newsClient,
+    now
+  });
+  const strategySymbols = universeSelection.enabled
+    ? universeSelection.strategySymbols
+    : normalizedSymbols;
   const portfolio = createPortfolioFromAlpaca(account, positions);
   const normalizedAccount = normalizeAccount(account);
   const dailyGuard = createDailyTradingGuard({
@@ -75,7 +92,7 @@ export async function runAlpacaPaperLoop({
   const orders = [];
   let barsProcessed = 0;
 
-  for (const symbol of normalizedSymbols) {
+  for (const symbol of strategySymbols) {
     const symbolBars = barsBySymbol.get(symbol) || [];
     if (!symbolBars.length) {
       signals.push(createMissingDataSignal({ symbol, createdAt }));
@@ -206,6 +223,9 @@ export async function runAlpacaPaperLoop({
     profile: runConfig.paperTraining.profile,
     requestedSymbols,
     symbols: normalizedSymbols,
+    strategySymbols,
+    selection: universeSelection,
+    barFetchFailures: barPayload.failures || [],
     addedPositionSymbols,
     timeframe: runTimeframe,
     feed,
@@ -230,7 +250,9 @@ export async function runAlpacaPaperLoop({
       approvedRiskDecisions: riskDecisions.filter((decision) => decision.approved).length,
       rejectedRiskDecisions: riskDecisions.filter((decision) => !decision.approved).length,
       orders: orders.length,
-      submittedOrders: orders.filter((order) => Boolean(order.submitted)).length
+      submittedOrders: orders.filter((order) => Boolean(order.submitted)).length,
+      scannedSymbols: universeSelection.scannedSymbols.length,
+      selectedSymbols: universeSelection.selectedSymbols.length
     }
   };
 }
@@ -243,21 +265,33 @@ async function getStockBarsForSymbols(client, {
   start,
   end
 }) {
-  const payloads = await Promise.all(symbols.map(async (symbol) => client.getStockBars({
-    symbols: [symbol],
-    timeframe,
-    limit: bars,
-    feed,
-    sort: "desc",
-    start,
-    end
-  })));
+  const failures = [];
+  const payloads = await Promise.all(symbols.map(async (symbol) => {
+    try {
+      return await client.getStockBars({
+        symbols: [symbol],
+        timeframe,
+        limit: bars,
+        feed,
+        sort: "desc",
+        start,
+        end
+      });
+    } catch (error) {
+      failures.push({
+        symbol,
+        reason: error.message
+      });
+      return { bars: {} };
+    }
+  }));
 
   return {
     bars: payloads.reduce((combined, payload) => ({
       ...combined,
       ...(payload.bars || {})
-    }), {})
+    }), {}),
+    failures
   };
 }
 
@@ -273,7 +307,12 @@ export function formatAlpacaPaperLoop(run) {
     : "decision/log only";
   lines.push(`Mode:          ${mode}`);
   lines.push(`Profile:       ${run.profile || "standard"}`);
-  lines.push(`Symbols:       ${run.symbols.join(", ")}`);
+  if (run.selection?.enabled) {
+    lines.push(`Scanned:       ${run.selection.scannedSymbols.length} symbols`);
+    lines.push(`Selected:      ${run.selection.selectedSymbols.join(", ") || "none"}`);
+  } else {
+    lines.push(`Symbols:       ${run.symbols.join(", ")}`);
+  }
   if (run.addedPositionSymbols?.length) {
     lines.push(`Added exits:   ${run.addedPositionSymbols.join(", ")}`);
   }
@@ -299,6 +338,24 @@ export function formatAlpacaPaperLoop(run) {
   lines.push(`Risk approved: ${run.summary.approvedRiskDecisions}`);
   lines.push(`Risk rejected: ${run.summary.rejectedRiskDecisions}`);
   lines.push(`Orders:        ${run.summary.orders}`);
+
+  if (run.selection?.rankings?.length) {
+    lines.push("");
+    lines.push("Top Stock Candidates");
+    for (const candidate of run.selection.rankings.slice(0, 10)) {
+      lines.push(
+        `  ${candidate.symbol.padEnd(6)} score=${candidate.score.toFixed(1).padStart(6)} ${candidate.reasons.join(", ")}`
+      );
+    }
+  }
+
+  if (run.barFetchFailures?.length) {
+    lines.push("");
+    lines.push("Skipped Symbols");
+    for (const failure of run.barFetchFailures.slice(0, 10)) {
+      lines.push(`  ${failure.symbol.padEnd(6)} ${failure.reason}`);
+    }
+  }
 
   if (run.signals.length) {
     lines.push("");

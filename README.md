@@ -30,10 +30,10 @@ node src/cli.js sources
 node src/cli.js db
 node src/cli.js alpaca account
 node src/cli.js alpaca clock
-node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
-node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
+node src/cli.js alpaca bars
+node src/cli.js alpaca paper-loop --db
 node src/cli.js alpaca sync
-node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
+node src/cli.js scheduler run-once --confirm-paper
 node src/cli.js oanda candles --instrument XAU_USD --db
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
@@ -129,7 +129,7 @@ Then verify the connection:
 ```powershell
 node src/cli.js alpaca account
 node src/cli.js alpaca clock
-node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
+node src/cli.js alpaca bars
 ```
 
 For Finnhub stock news and catalyst checks, fill:
@@ -159,16 +159,18 @@ node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
 Run one live-paper strategy cycle using Alpaca historical/current bars, risk checks, and Postgres logging:
 
 ```powershell
-node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
+node src/cli.js alpaca paper-loop --db
 ```
 
 To let that loop submit paper orders, add the explicit paper confirmation. The paper-training loop is capped at `$100` max buy notional by default and logs the estimated stop-risk and target profit for each order:
 
 ```powershell
-node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
+node src/cli.js alpaca paper-loop --db --confirm-paper --max-notional 100 --target-rr 2.5
 ```
 
-The paper loop also adds any existing open Alpaca paper positions to the monitored symbol list. That keeps exit checks active even if a symbol is accidentally left out of the requested basket.
+The stock paper loop scans a broad liquid stock universe from `src/config/default.js`, ranks candidates by momentum, volume expansion, range, liquidity, and capped Finnhub catalyst checks, then sends only the strongest shortlist into strategy and risk. This is how the bot stays open to the wider market without blindly firing API calls or paper orders at every listed ticker.
+
+The paper loop also adds any existing open Alpaca paper positions to the monitored symbol list. That keeps exit checks active even if a symbol is not in the newest ranked shortlist.
 
 Open stock positions are protected by the strategy using intrabar stop and target checks. If the same bar touches both levels, the bot treats the stop as hit first so paper results stay conservative.
 
@@ -185,7 +187,7 @@ That stores the latest account snapshot, open positions, recent orders, and rece
 Run the complete stock paper cycle in one command:
 
 ```powershell
-node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
+node src/cli.js scheduler run-once --confirm-paper
 ```
 
 That checks the database, runs the Alpaca stock paper loop, writes the run, syncs account/orders/fills, and exports the Excel ledger.
@@ -193,7 +195,7 @@ That checks the database, runs the Alpaca stock paper loop, writes the run, sync
 Run the faster stock scalp profile:
 
 ```powershell
-node src/cli.js scheduler run-once --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
+node src/cli.js scheduler run-once --profile scalp --confirm-paper
 ```
 
 The scalp profile uses 5-minute candles, tighter stops, a 1.3R target, and the same paper-only Alpaca guardrails. It is built to attempt more trades without opening real-money risk.
@@ -208,13 +210,21 @@ Daily paper guardrails are active for stock training:
 To keep it running every hour:
 
 ```powershell
-node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
+node src/cli.js scheduler loop --confirm-paper --interval-minutes 60
 ```
 
 To run the scalp profile repeatedly, it defaults to a 5-minute interval:
 
 ```powershell
-node src/cli.js scheduler loop --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
+node src/cli.js scheduler loop --profile scalp --confirm-paper
+```
+
+Useful scanner controls:
+
+```powershell
+node src/cli.js scheduler run-once --profile scalp --max-selected 12 --max-catalysts 8 --confirm-paper
+node src/cli.js scheduler run-once --profile scalp --symbols TSLA,NVDA,AMD,PLTR --confirm-paper
+node src/cli.js scheduler run-once --profile scalp --no-catalysts --confirm-paper
 ```
 
 Pull Gold/USD candles through OANDA practice:

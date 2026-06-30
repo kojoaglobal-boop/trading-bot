@@ -293,16 +293,16 @@ async function runAlpacaCommand(args) {
 ===============
   node src/cli.js alpaca account
   node src/cli.js alpaca clock
-  node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA --feed iex
+  node src/cli.js alpaca bars --feed iex
   node src/cli.js alpaca orders
   node src/cli.js alpaca positions
   node src/cli.js alpaca fills
   node src/cli.js alpaca sync
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
-  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
-  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db --confirm-paper --max-notional 100 --target-rr 2.5
-  node src/cli.js alpaca paper-loop --profile scalp --symbols AAPL,TSLA,NVDA --db --confirm-paper
+  node src/cli.js alpaca paper-loop --db
+  node src/cli.js alpaca paper-loop --db --confirm-paper --max-notional 100 --target-rr 2.5
+  node src/cli.js alpaca paper-loop --profile scalp --db --confirm-paper
 `);
 }
 
@@ -485,11 +485,12 @@ async function runSchedulerCommand(args) {
 
   console.log(`Scheduler Commands
 ==================
-  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA
-  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
-  node src/cli.js scheduler run-once --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
-  node src/cli.js scheduler loop --symbols AAPL,TSLA,NVDA --confirm-paper --interval-minutes 60
-  node src/cli.js scheduler loop --profile scalp --symbols AAPL,TSLA,NVDA --confirm-paper
+  node src/cli.js scheduler run-once
+  node src/cli.js scheduler run-once --confirm-paper
+  node src/cli.js scheduler run-once --profile scalp --confirm-paper
+  node src/cli.js scheduler loop --confirm-paper --interval-minutes 60
+  node src/cli.js scheduler loop --profile scalp --confirm-paper
+  node src/cli.js scheduler run-once --profile scalp --max-selected 12 --max-catalysts 8
 `);
 }
 
@@ -504,11 +505,31 @@ function createStockPaperCycleOptions(args) {
     submitOrders: Boolean(args["confirm-paper"]),
     maxBuyNotional: optionalNumber(args.maxNotional || args["max-notional"]),
     targetRewardRiskRatio: optionalNumber(args.targetRR || args["target-rr"]),
+    selection: createStockSelectionOptions(args),
     exportOutDir: String(args.out || "reports/paper-ledger"),
     exportLimit: Number(args.limit || 500),
     writeDatabase: !args["no-db"],
     exportLedger: !args["no-export"]
   };
+}
+
+function createStockSelectionOptions(args) {
+  const selection = {};
+
+  if (args["no-selection"]) {
+    selection.enabled = false;
+  }
+  if (args.maxSelected || args["max-selected"]) {
+    selection.maxSelectedSymbols = Number(args.maxSelected || args["max-selected"]);
+  }
+  if (args.maxCatalysts || args["max-catalysts"]) {
+    selection.maxCatalystSymbols = Number(args.maxCatalysts || args["max-catalysts"]);
+  }
+  if (args.noCatalysts || args["no-catalysts"]) {
+    selection.useFinnhubCatalysts = false;
+  }
+
+  return selection;
 }
 
 function getDefaultSchedulerIntervalMinutes(profileName) {
@@ -671,10 +692,10 @@ Usage:
   node src/cli.js db
   node src/cli.js alpaca account
   node src/cli.js alpaca clock
-  node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
-  node src/cli.js alpaca paper-loop --symbols AAPL,TSLA,NVDA --db
+  node src/cli.js alpaca bars
+  node src/cli.js alpaca paper-loop --db
   node src/cli.js alpaca sync
-  node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
+  node src/cli.js scheduler run-once --confirm-paper
   node src/cli.js oanda candles --instrument XAU_USD --db
   node src/cli.js finnhub news --symbol TSLA
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db

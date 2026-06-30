@@ -1,5 +1,6 @@
 import { defaultConfig } from "../config/default.js";
 import { AlpacaClient } from "../integrations/alpaca-client.js";
+import { FinnhubClient } from "../integrations/finnhub-client.js";
 import { runAlpacaPaperLoop } from "./alpaca-paper-loop.js";
 import { syncAlpacaPaperState, writeAlpacaSyncToDatabase } from "./alpaca-sync.js";
 import { createDatabasePool, withDatabaseClient } from "./database-client.js";
@@ -42,6 +43,12 @@ export async function runStockPaperCycle(options = {}) {
   const writeSync = options.writeSync || writeAlpacaSyncToDatabase;
   const exportPaperLedgerFn = options.exportPaperLedgerFn || exportPaperLedger;
   const loadDailyStartEquity = options.loadDailyStartEquity || loadAlpacaDailyStartEquity;
+  const selection = {
+    ...(defaultConfig.stockPaper.selection || {}),
+    ...(profileSettings.config.selection || {}),
+    ...(options.selection || {})
+  };
+  const newsClient = options.newsClient ?? createNewsClient(selection);
 
   const startedAt = now.toISOString();
   const normalizedSymbols = normalizeSymbols(symbols);
@@ -81,6 +88,8 @@ export async function runStockPaperCycle(options = {}) {
     maxBuyNotional,
     targetRewardRiskRatio,
     dailyStartEquity: dailyStart?.equity,
+    selection,
+    newsClient,
     now
   });
   cycle.steps.paperLoop = {
@@ -194,7 +203,12 @@ export function formatStockPaperCycle(cycle) {
   lines.push(`Cycle ID:      ${cycle.cycleId}`);
   lines.push(`Mode:          ${cycle.submitted ? "submitted paper orders" : "decision/log only"}`);
   lines.push(`Profile:       ${cycle.profile || "standard"}`);
-  lines.push(`Symbols:       ${cycle.symbols.join(", ")}`);
+  if (paperRun.selection?.enabled) {
+    lines.push(`Universe:      ${paperRun.selection.scannedSymbols.length} scanned`);
+    lines.push(`Selected:      ${paperRun.selection.selectedSymbols.join(", ") || "none"}`);
+  } else {
+    lines.push(`Symbols:       ${cycle.symbols.join(", ")}`);
+  }
   lines.push(`Timeframe:     ${cycle.timeframe || "n/a"}`);
   if (cycle.steps.dailyStart?.equity) {
     lines.push(`Day start:     ${money(cycle.steps.dailyStart.equity)}`);
@@ -211,6 +225,10 @@ export function formatStockPaperCycle(cycle) {
   lines.push(`Risk approved: ${cycle.summary.approvedRiskDecisions}`);
   lines.push(`Orders:        ${cycle.summary.orders}`);
   lines.push(`Submitted:     ${cycle.summary.submittedOrders}`);
+  if (cycle.summary.scannedSymbols) {
+    lines.push(`Scanned:       ${cycle.summary.scannedSymbols}`);
+    lines.push(`Selected:      ${cycle.summary.selectedSymbols}`);
+  }
   lines.push(`Positions:     ${cycle.summary.positions}`);
   lines.push(`Fills:         ${cycle.summary.fills}`);
 
@@ -230,6 +248,16 @@ export function formatStockPaperCycle(cycle) {
     }
   }
 
+  if (paperRun.selection?.rankings?.length) {
+    lines.push("");
+    lines.push("Top Stock Candidates");
+    for (const candidate of paperRun.selection.rankings.slice(0, 10)) {
+      lines.push(
+        `  ${candidate.symbol.padEnd(6)} score=${candidate.score.toFixed(1).padStart(6)} ${candidate.reasons.join(", ")}`
+      );
+    }
+  }
+
   return lines.join("\n");
 }
 
@@ -245,12 +273,22 @@ function createCycleSummary(cycle) {
     rejectedRiskDecisions: Number(paperSummary.rejectedRiskDecisions || 0),
     orders: Number(paperSummary.orders || 0),
     submittedOrders: Number(paperSummary.submittedOrders || 0),
+    scannedSymbols: Number(paperSummary.scannedSymbols || 0),
+    selectedSymbols: Number(paperSummary.selectedSymbols || 0),
     positions: Number(syncSummary.positions || 0),
     brokerOrders: Number(syncSummary.orders || 0),
     fills: Number(syncSummary.fills || 0),
     exportFiles: exportFiles.length,
     exportRows: exportFiles.reduce((sum, file) => sum + Number(file.rows || 0), 0)
   };
+}
+
+function createNewsClient(selection) {
+  if (!selection?.useFinnhubCatalysts || !process.env.FINNHUB_API_KEY) {
+    return null;
+  }
+
+  return new FinnhubClient();
 }
 
 function normalizeSymbols(symbols) {
