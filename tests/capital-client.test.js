@@ -2,7 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CapitalClient,
+  formatCapitalDealResult,
   formatCapitalMarkets,
+  formatCapitalPositions,
   formatCapitalPrices,
   normalizeCapitalPrices,
   normalizeCapitalResolution
@@ -67,6 +69,85 @@ test("CapitalClient creates a session and sends CST security headers", async () 
   assert.equal(requests[1].options.headers["X-SECURITY-TOKEN"], "security-1");
 });
 
+test("CapitalClient can list, create, confirm, and close demo positions", async () => {
+  const requests = [];
+  const client = new CapitalClient({
+    env: {
+      CAPITAL_ENV: "demo",
+      CAPITAL_IDENTIFIER: "kojo@example.com",
+      CAPITAL_API_KEY: "api-key-1",
+      CAPITAL_PASSWORD: "password-1"
+    },
+    fetchFn: async (input, options) => {
+      const url = new URL(String(input));
+      requests.push({ url, options });
+
+      if (url.pathname === "/api/v1/session") {
+        return jsonResponse({ status: "OK" }, {
+          CST: "cst-1",
+          "X-SECURITY-TOKEN": "security-1"
+        });
+      }
+
+      if (url.pathname === "/api/v1/positions" && options.method === "GET") {
+        return jsonResponse({
+          positions: [{
+            market: { epic: "GOLD" },
+            position: {
+              dealId: "deal-1",
+              direction: "BUY",
+              size: 0.01,
+              level: 4030,
+              upl: 1.25
+            }
+          }]
+        });
+      }
+
+      if (url.pathname === "/api/v1/positions" && options.method === "POST") {
+        return jsonResponse({ dealReference: "ref-1" });
+      }
+
+      if (url.pathname === "/api/v1/confirms/ref-1") {
+        return jsonResponse({
+          dealReference: "ref-1",
+          dealId: "deal-1",
+          dealStatus: "ACCEPTED",
+          epic: "GOLD",
+          direction: "BUY",
+          size: 0.01,
+          level: 4030
+        });
+      }
+
+      if (url.pathname === "/api/v1/positions/deal-1" && options.method === "DELETE") {
+        return jsonResponse({ dealReference: "close-ref-1" });
+      }
+
+      throw new Error(`unexpected request ${options.method} ${url.pathname}`);
+    }
+  });
+
+  const positions = await client.getPositions();
+  const created = await client.createPosition({
+    epic: "GOLD",
+    direction: "BUY",
+    size: 0.01,
+    stopDistance: 10,
+    profitDistance: 20
+  });
+  const confirm = await client.getConfirm(created.dealReference);
+  const closed = await client.closePosition("deal-1");
+
+  assert.equal(positions.positions.length, 1);
+  assert.equal(created.dealReference, "ref-1");
+  assert.equal(confirm.dealStatus, "ACCEPTED");
+  assert.equal(closed.dealReference, "close-ref-1");
+  assert.equal(JSON.parse(requests[2].options.body).profitDistance, 20);
+  assert.match(formatCapitalPositions(positions), /GOLD/);
+  assert.match(formatCapitalDealResult(confirm), /ACCEPTED/);
+});
+
 test("normalizeCapitalPrices maps GOLD prices to internal gold bars", () => {
   const bars = normalizeCapitalPrices({
     prices: [{
@@ -106,3 +187,13 @@ test("Capital helpers normalize resolutions and format market search results", (
     }]
   }), /GOLD/);
 });
+
+function jsonResponse(payload, headers = {}) {
+  return {
+    ok: true,
+    headers: new Headers(headers),
+    async text() {
+      return JSON.stringify(payload);
+    }
+  };
+}

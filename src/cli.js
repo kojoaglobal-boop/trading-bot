@@ -55,7 +55,9 @@ import {
 import {
   CapitalClient,
   formatCapitalAccounts,
-  formatCapitalMarkets
+  formatCapitalDealResult,
+  formatCapitalMarkets,
+  formatCapitalPositions
 } from "./integrations/capital-client.js";
 import {
   formatOandaAccountSummary,
@@ -494,6 +496,70 @@ async function runCapitalCommand(args) {
     return;
   }
 
+  if (subcommand === "positions") {
+    const positions = await client.getPositions();
+    console.log(formatCapitalPositions(positions, {
+      limit: Number(args.limit || 20)
+    }));
+    return;
+  }
+
+  if (subcommand === "confirm") {
+    const dealReference = String(args.dealReference || args["deal-reference"] || "").trim();
+    const confirm = await client.getConfirm(dealReference);
+    console.log(formatCapitalDealResult(confirm, {
+      title: "Capital.com Deal Confirm"
+    }));
+    return;
+  }
+
+  if (subcommand === "open-position") {
+    assertCapitalDemoConfirmation(args, client);
+    const created = await client.createPosition({
+      epic: String(args.epic || "GOLD").trim().toUpperCase(),
+      direction: String(args.direction || args.side || "BUY").trim().toUpperCase(),
+      size: optionalNumber(args.size),
+      guaranteedStop: Boolean(args.guaranteedStop || args["guaranteed-stop"]),
+      trailingStop: Boolean(args.trailingStop || args["trailing-stop"]),
+      stopLevel: optionalNumber(args.stopLevel || args["stop-level"]),
+      stopDistance: optionalNumber(args.stopDistance || args["stop-distance"]),
+      stopAmount: optionalNumber(args.stopAmount || args["stop-amount"]),
+      profitLevel: optionalNumber(args.profitLevel || args["profit-level"]),
+      profitDistance: optionalNumber(args.profitDistance || args["profit-distance"]),
+      profitAmount: optionalNumber(args.profitAmount || args["profit-amount"])
+    });
+    console.log(formatCapitalDealResult(created, {
+      title: "Capital.com Demo Position Submitted"
+    }));
+
+    if (created.dealReference) {
+      const confirm = await client.getConfirm(created.dealReference);
+      console.log("");
+      console.log(formatCapitalDealResult(confirm, {
+        title: "Capital.com Deal Confirm"
+      }));
+    }
+    return;
+  }
+
+  if (subcommand === "close-position") {
+    assertCapitalDemoConfirmation(args, client);
+    const dealId = String(args.dealId || args["deal-id"] || "").trim();
+    const closed = await client.closePosition(dealId);
+    console.log(formatCapitalDealResult(closed, {
+      title: "Capital.com Demo Position Close Submitted"
+    }));
+
+    if (closed.dealReference) {
+      const confirm = await client.getConfirm(closed.dealReference);
+      console.log("");
+      console.log(formatCapitalDealResult(confirm, {
+        title: "Capital.com Deal Confirm"
+      }));
+    }
+    return;
+  }
+
   if (subcommand === "prices") {
     const result = await fetchCapitalPrices({
       client,
@@ -519,8 +585,12 @@ async function runCapitalCommand(args) {
   node src/cli.js capital account
   node src/cli.js capital markets --search gold
   node src/cli.js capital markets --search xau
+  node src/cli.js capital positions
+  node src/cli.js capital confirm --deal-reference REF
   node src/cli.js capital prices --epic GOLD --resolution MINUTE_5
   node src/cli.js capital prices --epic GOLD --resolution MINUTE_5 --db
+  node src/cli.js capital open-position --epic GOLD --direction BUY --size 0.01 --stop-distance 10 --profit-distance 20 --confirm-capital-demo
+  node src/cli.js capital close-position --deal-id DEAL_ID --confirm-capital-demo
 `);
 }
 
@@ -709,6 +779,16 @@ function getDefaultSchedulerIntervalMinutes(profileName) {
 function assertPaperConfirmation(args) {
   if (!args["confirm-paper"]) {
     throw new Error("Refusing to submit even a paper order without --confirm-paper.");
+  }
+}
+
+function assertCapitalDemoConfirmation(args, client) {
+  if (client.environment !== "demo") {
+    throw new Error(`Refusing Capital.com order because CAPITAL_ENV is ${client.environment}; demo only is allowed here.`);
+  }
+
+  if (!args["confirm-capital-demo"]) {
+    throw new Error("Refusing Capital.com demo order without --confirm-capital-demo.");
   }
 }
 

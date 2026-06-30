@@ -107,6 +107,77 @@ export class CapitalClient {
     });
   }
 
+  async getPositions() {
+    return this.requestJson({
+      method: "GET",
+      path: "/api/v1/positions"
+    });
+  }
+
+  async getConfirm(dealReference) {
+    if (!dealReference) {
+      throw new Error("Capital.com dealReference is required.");
+    }
+
+    return this.requestJson({
+      method: "GET",
+      path: `/api/v1/confirms/${encodeURIComponent(dealReference)}`
+    });
+  }
+
+  async createPosition({
+    epic,
+    direction,
+    size,
+    guaranteedStop,
+    trailingStop,
+    stopLevel,
+    stopDistance,
+    stopAmount,
+    profitLevel,
+    profitDistance,
+    profitAmount
+  } = {}) {
+    if (!epic) {
+      throw new Error("Capital.com market epic is required.");
+    }
+    if (!["BUY", "SELL"].includes(String(direction || "").toUpperCase())) {
+      throw new Error("Capital.com direction must be BUY or SELL.");
+    }
+    if (!Number.isFinite(Number(size)) || Number(size) <= 0) {
+      throw new Error("Capital.com position size must be a positive number.");
+    }
+
+    return this.requestJson({
+      method: "POST",
+      path: "/api/v1/positions",
+      body: compactObject({
+        epic,
+        direction: String(direction).toUpperCase(),
+        size: Number(size),
+        guaranteedStop,
+        trailingStop,
+        stopLevel,
+        stopDistance,
+        stopAmount,
+        profitLevel,
+        profitDistance,
+        profitAmount
+      })
+    });
+  }
+
+  async closePosition(dealId) {
+    if (!dealId) {
+      throw new Error("Capital.com dealId is required.");
+    }
+
+    return this.requestJson({
+      method: "DELETE",
+      path: `/api/v1/positions/${encodeURIComponent(dealId)}`
+    });
+  }
+
   async requestJson({ method = "GET", path, query, body } = {}) {
     await this.ensureSession();
     const response = await this.rawRequest({
@@ -250,6 +321,49 @@ export function formatCapitalMarkets(payload, { limit = 30 } = {}) {
   return lines.join("\n");
 }
 
+export function formatCapitalPositions(payload, { limit = 20 } = {}) {
+  const positions = payload.positions || [];
+  const lines = [];
+  lines.push("Capital.com Demo Positions");
+  lines.push("==========================");
+
+  if (!positions.length) {
+    lines.push("No positions returned.");
+    return lines.join("\n");
+  }
+
+  for (const item of positions.slice(0, limit)) {
+    const position = item.position || item;
+    const market = item.market || {};
+    lines.push(
+      `${String(market.epic || position.epic || "unknown").padEnd(12)} ${String(position.direction || "").padEnd(4)} size=${formatNumber(position.size)} level=${formatMaybePrice(position.level)} upl=${money(position.upl)} deal=${position.dealId || "n/a"}`
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatCapitalDealResult(payload, { title = "Capital.com Deal Result" } = {}) {
+  const lines = [];
+  lines.push(title);
+  lines.push("=".repeat(title.length));
+  lines.push(`Deal reference: ${payload.dealReference || "n/a"}`);
+  if (payload.dealId) lines.push(`Deal ID:        ${payload.dealId}`);
+  if (payload.dealStatus) lines.push(`Deal status:    ${payload.dealStatus}`);
+  if (payload.status) lines.push(`Status:         ${payload.status}`);
+  if (payload.epic) lines.push(`Epic:           ${payload.epic}`);
+  if (payload.direction) lines.push(`Direction:      ${payload.direction}`);
+  if (payload.size !== undefined) lines.push(`Size:           ${formatNumber(payload.size)}`);
+  if (payload.level !== undefined) lines.push(`Level:          ${formatMaybePrice(payload.level)}`);
+  if (payload.affectedDeals?.length) {
+    lines.push("Affected deals:");
+    for (const deal of payload.affectedDeals) {
+      lines.push(`  ${deal.dealId || "n/a"} ${deal.status || ""}`.trimEnd());
+    }
+  }
+  return lines.join("\n");
+}
+
 export function formatCapitalPrices(bars, { limit = 8 } = {}) {
   const lines = [];
   lines.push("Capital.com Price Bars");
@@ -347,6 +461,12 @@ function getHeader(headers, name) {
 
 function trimTrailingSlash(value) {
   return String(value).replace(/\/+$/, "");
+}
+
+function compactObject(value) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined && item !== null && item !== "")
+  );
 }
 
 function money(value) {
