@@ -104,7 +104,7 @@ test("runCapitalGoldDemoLoop holds when Capital already has an open Gold demo po
           position: {
             dealId: "deal-1",
             direction: "BUY",
-            size: 0.01,
+            size: 0.3,
             level: 4030
           }
         }]
@@ -124,6 +124,32 @@ test("runCapitalGoldDemoLoop holds when Capital already has an open Gold demo po
   assert.equal(loop.decision.action, "HOLD");
   assert.match(loop.decision.reason, /already has 1\/1 open GOLD/);
   assert.match(formatCapitalGoldDemoLoop(loop), /Capital\.com Gold Demo Loop/);
+});
+
+test("buildCapitalGoldDemoDecision closes Gold demo positions below minimum lot size", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeGoldBar(index));
+  const decision = buildCapitalGoldDemoDecision({
+    bars,
+    epic: "GOLD",
+    openGoldPositions: [{
+      epic: "GOLD",
+      dealId: "small-deal",
+      direction: "SELL",
+      size: 0.01,
+      level: 4014
+    }],
+    size: 0.3,
+    minPositionSize: 0.3,
+    cycle: {
+      report: {
+        fills: []
+      }
+    }
+  });
+
+  assert.equal(decision.action, "CLOSE_UNDERSIZED");
+  assert.equal(decision.closePositions.length, 1);
+  assert.match(decision.reason, /below minimum size 0.3/);
 });
 
 test("buildCapitalGoldDemoDecision blocks duplicate entries on the same latest candle", () => {

@@ -24,6 +24,7 @@ export async function runCapitalGoldDemoLoop({
   resolutions = defaultConfig.goldDemo.timeframes,
   count = 300,
   size = defaultConfig.goldDemo.defaultSize,
+  minPositionSize = defaultConfig.goldDemo.minPositionSize,
   submitOrders = false,
   strategyOptions = DEFAULT_PULLBACK_OPTIONS,
   now = new Date(),
@@ -109,6 +110,7 @@ export async function runCapitalGoldDemoLoop({
       dailyGuard,
       dailyState,
       maxOpenPositions,
+      minPositionSize,
       maxSignalAgeBars,
       maxEntryDriftBps,
       allowTrendProbe,
@@ -141,14 +143,15 @@ export async function runCapitalGoldDemoLoop({
       resolution: result.resolution,
       bars: result.bars
     }));
-  const closeDecision = timeframeResults.find((result) => result.decision.action === "CLOSE_ALL")?.decision;
+  const closeDecision = timeframeResults.find((result) => result.decision.action.startsWith("CLOSE"))?.decision;
   const decision = closeDecision || entryDecisions[0] || timeframeResults[0]?.decision || holdDecision("No Gold timeframe could be evaluated.");
 
   const submissions = [];
   const confirms = [];
   if (submitOrders) {
-    if (decision.action === "CLOSE_ALL") {
-      for (const position of openGoldPositions) {
+    if (decision.action.startsWith("CLOSE")) {
+      const positionsToClose = decision.closePositions || openGoldPositions;
+      for (const position of positionsToClose) {
         if (!position.dealId) {
           continue;
         }
@@ -211,6 +214,7 @@ export function buildCapitalGoldDemoDecision({
   dailyGuard = activeGuard(),
   dailyState = {},
   maxOpenPositions = defaultConfig.goldDemo.maxOpenPositions,
+  minPositionSize = defaultConfig.goldDemo.minPositionSize,
   maxSignalAgeBars = defaultConfig.goldDemo.maxSignalAgeBars,
   maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
   allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
@@ -232,6 +236,18 @@ export function buildCapitalGoldDemoDecision({
 
   if (dailyGuard.blocksEntries) {
     return holdDecision(`${dailyGuard.status}: ${dailyGuard.reason}`);
+  }
+
+  const minimumSize = Number(minPositionSize || size || 0);
+  const undersizedOpenPositions = Number.isFinite(minimumSize) && minimumSize > 0
+    ? openGoldPositions.filter((position) => Number(position.size || 0) > 0 && Number(position.size || 0) < minimumSize)
+    : [];
+  if (undersizedOpenPositions.length) {
+    return {
+      action: "CLOSE_UNDERSIZED",
+      reason: `${undersizedOpenPositions.length} open ${epic} demo position(s) are below minimum size ${minimumSize}. Closing them before new entries.`,
+      closePositions: undersizedOpenPositions
+    };
   }
 
   if (openGoldPositions.length >= maxOpenPositions) {

@@ -521,8 +521,8 @@ async function runGoldCommand(args) {
   node src/cli.js gold capital-demo-loop
   node src/cli.js gold capital-demo-loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30
   node src/cli.js gold capital-demo-loop --loop --interval-seconds 60
-  node src/cli.js gold capital-demo-loop --size 0.01 --confirm-capital-demo
-  node src/cli.js gold capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 0.01 --confirm-capital-demo
+  node src/cli.js gold capital-demo-loop --size 0.3 --confirm-capital-demo
+  node src/cli.js gold capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 0.3 --min-position-size 0.3 --confirm-capital-demo
 `);
 }
 
@@ -541,6 +541,7 @@ function createGoldCapitalDemoLoopOptions(args) {
     resolutions,
     count: Number(args.count || args.limit || 300),
     size: optionalNumber(args.size) ?? defaultConfig.goldDemo.defaultSize,
+    minPositionSize: optionalNumber(args.minPositionSize || args["min-position-size"]) ?? defaultConfig.goldDemo.minPositionSize,
     submitOrders: Boolean(args["confirm-capital-demo"]),
     accountStartingCash: optionalNumber(args.accountStartingCash || args["account-starting-cash"]) ?? defaultConfig.goldDemo.accountStartingCash,
     dailyProfitTargetDollars: optionalNumber(args.dailyProfitTargetDollars || args["daily-profit-target"]) ?? defaultConfig.goldDemo.dailyProfitTargetDollars,
@@ -675,7 +676,7 @@ async function runCapitalCommand(args) {
   node src/cli.js capital confirm --deal-reference REF
   node src/cli.js capital prices --epic GOLD --resolution MINUTE_5
   node src/cli.js capital prices --epic GOLD --resolution MINUTE_5 --db
-  node src/cli.js capital open-position --epic GOLD --direction BUY --size 0.01 --stop-distance 10 --profit-distance 20 --confirm-capital-demo
+  node src/cli.js capital open-position --epic GOLD --direction BUY --size 0.3 --stop-distance 10 --profit-distance 20 --confirm-capital-demo
   node src/cli.js capital close-position --deal-id DEAL_ID --confirm-capital-demo
 `);
 }
