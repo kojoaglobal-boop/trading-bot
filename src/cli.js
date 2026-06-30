@@ -20,6 +20,7 @@ import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } fro
 import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
 import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
+import { formatCapitalGoldDemoLoop, runCapitalGoldDemoLoop } from "./core/capital-gold-demo-loop.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
 import { formatGoldPullbackSweep, runGoldPullbackSweep } from "./core/gold-pullback-sweep.js";
@@ -463,6 +464,30 @@ async function runGoldCommand(args) {
     return;
   }
 
+  if (subcommand === "capital-demo-loop") {
+    const loop = await runCapitalGoldDemoLoop({
+      client: new CapitalClient(),
+      epic: String(args.epic || "GOLD").trim().toUpperCase(),
+      resolution: String(args.resolution || args.granularity || "MINUTE_5"),
+      count: Number(args.count || args.limit || 300),
+      size: optionalNumber(args.size),
+      submitOrders: Boolean(args["confirm-capital-demo"]),
+      strategyOptions: {
+        targetRR: optionalNumber(args.targetRR || args["target-rr"]) || 2,
+        touchAtrMultiple: optionalNumber(args.touchAtrMultiple || args["touch-atr-multiple"]) || 0.75,
+        stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) || 2,
+        maxHoldBars: optionalNumber(args.maxHoldBars || args["max-hold-bars"]) || 12,
+        minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) || 0.00015
+      }
+    });
+    console.log(formatCapitalGoldDemoLoop(loop));
+
+    if (!args["confirm-capital-demo"]) {
+      console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow a Capital.com demo order if the latest bar has a fresh entry.");
+    }
+    return;
+  }
+
   console.log(`Gold Commands
 =============
   node src/cli.js gold paper-cycle --sample --no-db
@@ -473,6 +498,8 @@ async function runGoldCommand(args) {
   node src/cli.js gold paper-cycle --strategy pullback --provider capital --epic GOLD --granularity M5
   node src/cli.js gold trendline-sweep
   node src/cli.js gold pullback-sweep
+  node src/cli.js gold capital-demo-loop
+  node src/cli.js gold capital-demo-loop --size 0.01 --confirm-capital-demo
 `);
 }
 
