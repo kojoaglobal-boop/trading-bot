@@ -1,4 +1,5 @@
 import { defaultConfig } from "../config/default.js";
+import { GoldTrendlineStrategy } from "../strategies/gold-trendline.js";
 import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
 import { createAuditRecord } from "./audit-log.js";
 import { runBacktest } from "./backtester.js";
@@ -13,6 +14,7 @@ import { RiskEngine } from "./risk-engine.js";
 
 export async function runGoldPaperCycle(options = {}) {
   const provider = options.sample ? "sample" : String(options.provider || "oanda").trim().toLowerCase();
+  const strategyName = String(options.strategy || "momentum").trim().toLowerCase();
   const mode = `gold-paper-${provider}`;
   const instrument = String(options.instrument || options.epic || defaultInstrumentForProvider(provider)).trim().toUpperCase();
   const granularity = String(options.granularity || options.resolution || "M5").trim().toUpperCase();
@@ -38,7 +40,7 @@ export async function runGoldPaperCycle(options = {}) {
     mode,
     portfolio: new Portfolio({ startingCash: defaultConfig.account.startingCash }),
     riskEngine: new RiskEngine(createGoldRiskConfig(options)),
-    strategy: new MomentumBreakoutStrategy(createGoldStrategyConfig(options))
+    strategy: createGoldStrategy(strategyName, options)
   });
   const audit = createAuditRecord(report, now);
   const storedBars = writeDatabase ? await upsertMarketBars(bars) : null;
@@ -50,6 +52,7 @@ export async function runGoldPaperCycle(options = {}) {
     mode,
     instrument,
     granularity,
+    strategy: strategyName,
     count,
     writeDatabase: Boolean(writeDatabase),
     bars,
@@ -70,6 +73,7 @@ export function formatGoldPaperCycle(cycle) {
   lines.push(`Mode:          ${cycle.mode}`);
   lines.push(`Instrument:    ${cycle.instrument.replace("_", "/")}`);
   lines.push(`Granularity:   ${cycle.granularity}`);
+  lines.push(`Strategy:      ${cycle.strategy}`);
   lines.push(`Bars:          ${report.metrics.bars}`);
   lines.push(`Starting:      ${money(report.account.startingCash)}`);
   lines.push(`Final equity:  ${money(report.account.finalEquity)}`);
@@ -166,7 +170,15 @@ function defaultInstrumentForProvider(provider) {
   return provider === "capital" ? "GOLD" : "XAU_USD";
 }
 
-function createGoldStrategyConfig(options) {
+function createGoldStrategy(strategyName, options) {
+  if (strategyName === "trendline") {
+    return new GoldTrendlineStrategy(createGoldTrendlineStrategyConfig(options));
+  }
+
+  return new MomentumBreakoutStrategy(createGoldMomentumStrategyConfig(options));
+}
+
+function createGoldMomentumStrategyConfig(options) {
   return {
     ...defaultConfig.strategy.momentumBreakout,
     fastPeriod: Number(options.fastPeriod || options["fast-period"] || 5),
@@ -175,6 +187,26 @@ function createGoldStrategyConfig(options) {
     minVolumeExpansion: Number(options.minVolumeExpansion || options["min-volume-expansion"] || 0.85),
     stopLossPct: Number(options.stopLossPct || options["stop-loss-pct"] || 0.004),
     takeProfitRR: Number(options.targetRewardRiskRatio || options.targetRR || options["target-rr"] || 1.6)
+  };
+}
+
+function createGoldTrendlineStrategyConfig(options) {
+  return {
+    ...defaultConfig.strategy.goldTrendline,
+    fastBiasPeriod: Number(options.fastBiasPeriod || options["fast-bias-period"] || defaultConfig.strategy.goldTrendline.fastBiasPeriod),
+    slowBiasPeriod: Number(options.slowBiasPeriod || options["slow-bias-period"] || defaultConfig.strategy.goldTrendline.slowBiasPeriod),
+    pivotDepth: Number(options.pivotDepth || options["pivot-depth"] || defaultConfig.strategy.goldTrendline.pivotDepth),
+    trendlineLookback: Number(options.trendlineLookback || options["trendline-lookback"] || defaultConfig.strategy.goldTrendline.trendlineLookback),
+    minTrendlineTouches: Number(options.minTrendlineTouches || options["min-trendline-touches"] || defaultConfig.strategy.goldTrendline.minTrendlineTouches),
+    maxTrendlineViolations: Number(options.maxTrendlineViolations || options["max-trendline-violations"] || defaultConfig.strategy.goldTrendline.maxTrendlineViolations),
+    touchAtrMultiple: Number(options.touchAtrMultiple || options["touch-atr-multiple"] || defaultConfig.strategy.goldTrendline.touchAtrMultiple),
+    entryAtrMultiple: Number(options.entryAtrMultiple || options["entry-atr-multiple"] || defaultConfig.strategy.goldTrendline.entryAtrMultiple),
+    stopAtrMultiple: Number(options.stopAtrMultiple || options["stop-atr-multiple"] || defaultConfig.strategy.goldTrendline.stopAtrMultiple),
+    takeProfitRR: Number(options.targetRewardRiskRatio || options.targetRR || options["target-rr"] || defaultConfig.strategy.goldTrendline.takeProfitRR),
+    minAtrPct: Number(options.minAtrPct || options["min-atr-pct"] || defaultConfig.strategy.goldTrendline.minAtrPct),
+    maxAtrPct: Number(options.maxAtrPct || options["max-atr-pct"] || defaultConfig.strategy.goldTrendline.maxAtrPct),
+    sessionUtcStartHour: Number(options.sessionUtcStartHour || options["session-utc-start-hour"] || defaultConfig.strategy.goldTrendline.sessionUtcStartHour),
+    sessionUtcEndHour: Number(options.sessionUtcEndHour || options["session-utc-end-hour"] || defaultConfig.strategy.goldTrendline.sessionUtcEndHour)
   };
 }
 
@@ -187,6 +219,10 @@ function createGoldRiskConfig(options) {
     maxAssetClassExposurePct: {
       ...defaultConfig.risk.maxAssetClassExposurePct,
       gold: Number(options.maxGoldExposurePct || options["max-gold-exposure-pct"] || 0.45)
+    },
+    allowShorts: {
+      ...defaultConfig.risk.allowShorts,
+      gold: String(options.strategy || "").toLowerCase() === "trendline"
     },
     maxSpreadBps: {
       ...defaultConfig.risk.maxSpreadBps,

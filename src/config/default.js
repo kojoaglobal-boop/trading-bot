@@ -53,6 +53,23 @@ export const defaultConfig = {
       minVolumeExpansion: 1.05,
       stopLossPct: 0.035,
       takeProfitRR: 2.5
+    },
+    goldTrendline: {
+      fastBiasPeriod: 8,
+      slowBiasPeriod: 21,
+      pivotDepth: 2,
+      trendlineLookback: 36,
+      maxPivotCandidates: 8,
+      minTrendlineTouches: 2,
+      maxTrendlineViolations: 1,
+      touchAtrMultiple: 0.35,
+      entryAtrMultiple: 0.7,
+      stopAtrMultiple: 0.9,
+      takeProfitRR: 1.6,
+      minAtrPct: 0.0008,
+      maxAtrPct: 0.008,
+      sessionUtcStartHour: 6,
+      sessionUtcEndHour: 20
     }
   },
   stockPaper: {
@@ -201,6 +218,13 @@ export const defaultConfig = {
       forex: 0.25
     },
     maxDrawdownPct: 0.12,
+    allowShorts: {
+      meme: false,
+      stock: false,
+      gold: false,
+      future: false,
+      forex: false
+    },
     maxSpreadBps: {
       meme: 90,
       stock: 25,

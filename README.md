@@ -248,6 +248,22 @@ Run the same Gold/USD paper cycle with Capital.com demo market data once the API
 node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5
 ```
 
+Run the Gold/USD trendline strategy:
+
+```powershell
+node src/cli.js gold paper-cycle --strategy trendline --provider capital --epic GOLD --granularity M5
+```
+
+The trendline strategy uses 30m trend bias, 15m support/resistance trendlines, 5m entry confirmation, ATR-based stops, and paper-only short support for Gold. Short entries stay disabled globally unless the Gold trendline cycle explicitly enables them.
+
+Sweep trendline settings against stored Capital.com Gold bars:
+
+```powershell
+node src/cli.js gold trendline-sweep
+```
+
+The sweep prints a qualification status. A strategy is not allowed onto the paper watchlist unless the best candidate has enough closed trades, positive P/L, profit factor above 1.10, and drawdown under 3%. If the sweep says `NOT QUALIFIED`, we improve the method instead of letting weak logic trade.
+
 OANDA remains a fallback if its API access gets fixed:
 
 ```powershell

@@ -19,17 +19,25 @@ export class RiskEngine {
       return reject(assetRejection);
     }
 
-    if (signal.action === "BUY") {
+    if (signal.action === "BUY" || signal.action === "SHORT") {
       const entryRejection = this.checkEntryLimits({ bar, snapshot });
       if (entryRejection) {
         return reject(entryRejection);
       }
 
-      return this.createBuyOrder({ bar, portfolio, signal, snapshot });
+      if (signal.action === "SHORT") {
+        const shortRejection = this.checkShortAllowed(bar);
+        if (shortRejection) {
+          return reject(shortRejection);
+        }
+        return this.createEntryOrder({ bar, portfolio, signal, snapshot, side: "SELL", intent: "SHORT_ENTRY" });
+      }
+
+      return this.createEntryOrder({ bar, portfolio, signal, snapshot, side: "BUY", intent: "LONG_ENTRY" });
     }
 
-    if (signal.action === "SELL") {
-      return this.createSellOrder({ bar, portfolio, signal });
+    if (signal.action === "SELL" || signal.action === "COVER") {
+      return this.createExitOrder({ bar, portfolio, signal });
     }
 
     return reject(`unsupported action ${signal.action}`);
@@ -65,7 +73,15 @@ export class RiskEngine {
     return null;
   }
 
-  createBuyOrder({ bar, portfolio, signal, snapshot }) {
+  checkShortAllowed(bar) {
+    const allowed = this.config.allowShorts?.[bar.assetClass] || false;
+    if (!allowed) {
+      return `short entries are not allowed for ${bar.assetClass}`;
+    }
+    return null;
+  }
+
+  createEntryOrder({ bar, portfolio, signal, snapshot, side, intent }) {
     if (portfolio.getPosition(bar.symbol)) {
       return reject("position already open");
     }
@@ -88,7 +104,9 @@ export class RiskEngine {
       return reject("no capacity for this trade");
     }
 
-    const entryPrice = bar.ask || bar.close;
+    const entryPrice = side === "BUY"
+      ? bar.ask || bar.close
+      : bar.bid || bar.close;
     const quantity = notional / entryPrice;
 
     if (!Number.isFinite(quantity) || quantity <= 0) {
@@ -101,7 +119,8 @@ export class RiskEngine {
     return approve({
       symbol: bar.symbol,
       assetClass: bar.assetClass,
-      side: "BUY",
+      side,
+      intent,
       quantity,
       notional,
       expectedPrice: entryPrice,
@@ -120,18 +139,29 @@ export class RiskEngine {
     return targetBudget > 0 ? targetBudget : pctBudget;
   }
 
-  createSellOrder({ bar, portfolio, signal }) {
+  createExitOrder({ bar, portfolio, signal }) {
     const position = portfolio.getPosition(bar.symbol);
     if (!position) {
-      return reject("no open position to sell");
+      return reject("no open position to exit");
     }
+
+    if (signal.action === "SELL" && position.side === "short") {
+      return reject("use COVER to exit a short position");
+    }
+
+    if (signal.action === "COVER" && position.side !== "short") {
+      return reject("use SELL to exit a long position");
+    }
+
+    const side = position.side === "short" ? "BUY" : "SELL";
 
     return approve({
       symbol: bar.symbol,
       assetClass: bar.assetClass,
-      side: "SELL",
+      side,
+      intent: position.side === "short" ? "SHORT_EXIT" : "LONG_EXIT",
       quantity: position.quantity,
-      expectedPrice: bar.bid || bar.close,
+      expectedPrice: side === "BUY" ? bar.ask || bar.close : bar.bid || bar.close,
       reason: signal.reason
     });
   }

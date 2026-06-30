@@ -72,6 +72,20 @@ test("runGoldPaperCycle can use Capital.com GOLD price data", async () => {
   assert.equal(cycle.report.sources[0].provider, "capital");
 });
 
+test("runGoldPaperCycle can run the Gold trendline strategy", async () => {
+  const cycle = await runGoldPaperCycle({
+    strategy: "trendline",
+    sample: true,
+    count: 160,
+    writeDatabase: false,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(cycle.strategy, "trendline");
+  assert.equal(cycle.mode, "gold-paper-sample");
+  assert.equal(cycle.report.metrics.bars, 160);
+});
+
 test("gold sample bars use gold-scale prices", () => {
   const bars = createSampleBars({
     symbols: [{

@@ -1,64 +1,48 @@
 export function analyzeFills(fills) {
-  const openLots = new Map();
+  const openLongLots = new Map();
+  const openShortLots = new Map();
   const closedTrades = [];
 
   for (const fill of fills) {
-    if (fill.side === "BUY") {
-      const lots = openLots.get(fill.symbol) || [];
+    if (fill.intent === "SHORT_ENTRY") {
+      const lots = openShortLots.get(fill.symbol) || [];
       lots.push({
         symbol: fill.symbol,
         assetClass: fill.assetClass,
+        direction: "short",
         quantity: fill.quantity,
         entryPrice: fill.price,
         entryTime: fill.time,
         entryCommission: fill.commission,
         reason: fill.reason
       });
-      openLots.set(fill.symbol, lots);
+      openShortLots.set(fill.symbol, lots);
       continue;
     }
 
-    if (fill.side !== "SELL") {
+    if (fill.intent === "SHORT_EXIT") {
+      closeShortLots({ fill, openShortLots, closedTrades });
       continue;
     }
 
-    let remaining = fill.quantity;
-    const lots = openLots.get(fill.symbol) || [];
-
-    while (remaining > 0 && lots.length) {
-      const lot = lots[0];
-      const quantity = Math.min(remaining, lot.quantity);
-      const entryCommission = lot.entryCommission * (quantity / lot.quantity);
-      const exitCommission = fill.commission * (quantity / fill.quantity);
-      const pnl = (fill.price - lot.entryPrice) * quantity - entryCommission - exitCommission;
-      const returnPct = fill.price / lot.entryPrice - 1;
-
-      closedTrades.push({
+    if (fill.side === "BUY") {
+      const lots = openLongLots.get(fill.symbol) || [];
+      lots.push({
         symbol: fill.symbol,
         assetClass: fill.assetClass,
-        quantity,
-        entryTime: lot.entryTime,
-        exitTime: fill.time,
-        entryPrice: lot.entryPrice,
-        exitPrice: fill.price,
-        pnl,
-        returnPct,
-        entryReason: lot.reason,
-        exitReason: fill.reason
+        direction: "long",
+        quantity: fill.quantity,
+        entryPrice: fill.price,
+        entryTime: fill.time,
+        entryCommission: fill.commission,
+        reason: fill.reason
       });
-
-      lot.quantity -= quantity;
-      remaining -= quantity;
-
-      if (lot.quantity <= 0.00000001) {
-        lots.shift();
-      }
+      openLongLots.set(fill.symbol, lots);
+      continue;
     }
 
-    if (lots.length) {
-      openLots.set(fill.symbol, lots);
-    } else {
-      openLots.delete(fill.symbol);
+    if (fill.side === "SELL") {
+      closeLongLots({ fill, openLongLots, closedTrades });
     }
   }
 
@@ -106,4 +90,88 @@ export function analyzeFills(fills) {
       largestLoss: losses.length ? Math.min(...losses.map((trade) => trade.pnl)) : 0
     }
   };
+}
+
+function closeLongLots({ fill, openLongLots, closedTrades }) {
+  let remaining = fill.quantity;
+  const lots = openLongLots.get(fill.symbol) || [];
+
+  while (remaining > 0 && lots.length) {
+    const lot = lots[0];
+    const quantity = Math.min(remaining, lot.quantity);
+    const entryCommission = lot.entryCommission * (quantity / lot.quantity);
+    const exitCommission = fill.commission * (quantity / fill.quantity);
+    const pnl = (fill.price - lot.entryPrice) * quantity - entryCommission - exitCommission;
+    const returnPct = fill.price / lot.entryPrice - 1;
+
+    closedTrades.push({
+      symbol: fill.symbol,
+      assetClass: fill.assetClass,
+      direction: "long",
+      quantity,
+      entryTime: lot.entryTime,
+      exitTime: fill.time,
+      entryPrice: lot.entryPrice,
+      exitPrice: fill.price,
+      pnl,
+      returnPct,
+      entryReason: lot.reason,
+      exitReason: fill.reason
+    });
+
+    lot.quantity -= quantity;
+    remaining -= quantity;
+
+    if (lot.quantity <= 0.00000001) {
+      lots.shift();
+    }
+  }
+
+  if (lots.length) {
+    openLongLots.set(fill.symbol, lots);
+  } else {
+    openLongLots.delete(fill.symbol);
+  }
+}
+
+function closeShortLots({ fill, openShortLots, closedTrades }) {
+  let remaining = fill.quantity;
+  const lots = openShortLots.get(fill.symbol) || [];
+
+  while (remaining > 0 && lots.length) {
+    const lot = lots[0];
+    const quantity = Math.min(remaining, lot.quantity);
+    const entryCommission = lot.entryCommission * (quantity / lot.quantity);
+    const exitCommission = fill.commission * (quantity / fill.quantity);
+    const pnl = (lot.entryPrice - fill.price) * quantity - entryCommission - exitCommission;
+    const returnPct = lot.entryPrice / fill.price - 1;
+
+    closedTrades.push({
+      symbol: fill.symbol,
+      assetClass: fill.assetClass,
+      direction: "short",
+      quantity,
+      entryTime: lot.entryTime,
+      exitTime: fill.time,
+      entryPrice: lot.entryPrice,
+      exitPrice: fill.price,
+      pnl,
+      returnPct,
+      entryReason: lot.reason,
+      exitReason: fill.reason
+    });
+
+    lot.quantity -= quantity;
+    remaining -= quantity;
+
+    if (lot.quantity <= 0.00000001) {
+      lots.shift();
+    }
+  }
+
+  if (lots.length) {
+    openShortLots.set(fill.symbol, lots);
+  } else {
+    openShortLots.delete(fill.symbol);
+  }
 }

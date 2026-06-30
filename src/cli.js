@@ -22,6 +22,7 @@ import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
+import { formatGoldTrendlineSweep, runGoldTrendlineSweep } from "./core/gold-trendline-sweep.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
 import {
@@ -410,6 +411,7 @@ async function runGoldCommand(args) {
       provider,
       granularity: String(args.granularity || "M5"),
       resolution: args.resolution ? String(args.resolution) : undefined,
+      strategy: args.strategy ? String(args.strategy) : undefined,
       count: Number(args.count || args.limit || 300),
       seed: Number(args.seed || 42),
       writeDatabase: !args["no-db"],
@@ -422,12 +424,26 @@ async function runGoldCommand(args) {
     return;
   }
 
+  if (subcommand === "trendline-sweep") {
+    const sweep = await runGoldTrendlineSweep({
+      source: String(args.source || args.dbSource || args["db-source"] || "capital").toLowerCase(),
+      mode: String(args.mode || args.dbMode || args["db-mode"] || "demo-market-data"),
+      symbol: String(args.symbol || "XAU/USD").toUpperCase(),
+      limit: Number(args.limit || 300),
+      maxResults: Number(args.maxResults || args["max-results"] || 12)
+    });
+    console.log(formatGoldTrendlineSweep(sweep));
+    return;
+  }
+
   console.log(`Gold Commands
 =============
   node src/cli.js gold paper-cycle --sample --no-db
   node src/cli.js gold paper-cycle --sample
   node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
   node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5
+  node src/cli.js gold paper-cycle --strategy trendline --provider capital --epic GOLD --granularity M5
+  node src/cli.js gold trendline-sweep
 `);
 }
 

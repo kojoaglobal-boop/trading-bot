@@ -21,6 +21,7 @@ export class PaperBroker {
       symbol: order.symbol,
       assetClass: order.assetClass,
       side: order.side,
+      intent: order.intent || null,
       quantity: order.quantity,
       price: fillPrice,
       notional,
