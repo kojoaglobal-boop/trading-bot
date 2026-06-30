@@ -247,6 +247,33 @@ async function runAlpacaCommand(args) {
     return;
   }
 
+  if (subcommand === "close-position") {
+    assertPaperConfirmation(args);
+    const symbol = String(args.symbol || "").trim().toUpperCase();
+    if (!symbol) {
+      throw new Error("Add --symbol to close a paper position.");
+    }
+
+    const positions = await client.getPositions();
+    const position = positions.find((item) => String(item.symbol || "").toUpperCase() === symbol);
+    if (!position) {
+      console.log(`No open Alpaca paper position found for ${symbol}.`);
+      return;
+    }
+
+    const order = {
+      symbol,
+      qty: String(position.qty),
+      side: "sell",
+      type: "market",
+      time_in_force: "day",
+      client_order_id: `tb-close-${Date.now()}`
+    };
+    const submitted = await client.submitOrder(order);
+    console.log(formatOrder(submitted));
+    return;
+  }
+
   if (subcommand === "paper-loop") {
     const submitOrders = Boolean(args["confirm-paper"]);
     const symbols = String(args.symbols || DEFAULT_STOCK_SYMBOLS)
@@ -303,6 +330,7 @@ async function runAlpacaCommand(args) {
   node src/cli.js alpaca sync
   node src/cli.js alpaca smoke-order --confirm-paper
   node src/cli.js alpaca market-order --symbol AAPL --notional 1 --confirm-paper
+  node src/cli.js alpaca close-position --symbol TSLA --confirm-paper
   node src/cli.js alpaca paper-loop --db
   node src/cli.js alpaca paper-loop --db --confirm-paper --max-notional 100 --target-rr 2.5
   node src/cli.js alpaca paper-loop --profile scalp --db --confirm-paper
