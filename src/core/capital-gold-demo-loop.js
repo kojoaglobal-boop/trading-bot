@@ -433,7 +433,7 @@ async function fetchReducedCapitalTimeframes({
 
   if (canBuildFromMinute) {
     const baseCount = Math.max(count, Number(defaultConfig.goldDemo.baseMinuteBars || 1500));
-    const result = await fetchCapitalPrices({
+    const result = await fetchCapitalPricesWithMaxFallback({
       client,
       epic,
       resolution: "MINUTE",
@@ -455,7 +455,7 @@ async function fetchReducedCapitalTimeframes({
     }
   } else {
     await Promise.all(resolutions.map(async (item) => {
-      const result = await fetchCapitalPrices({
+      const result = await fetchCapitalPricesWithMaxFallback({
         client,
         epic,
         resolution: item,
@@ -472,6 +472,33 @@ async function fetchReducedCapitalTimeframes({
       resolution: item,
       bars: byResolution.get(item)
     }));
+}
+
+async function fetchCapitalPricesWithMaxFallback(options) {
+  const requestedCount = Number(options.count || 0);
+  const fallbackCounts = unique([
+    requestedCount,
+    Math.min(requestedCount, 1000),
+    Math.min(requestedCount, 500),
+    Math.min(requestedCount, 300)
+  ]).filter((value) => Number.isFinite(value) && value > 0);
+
+  let lastError = null;
+  for (const count of fallbackCounts) {
+    try {
+      return await fetchCapitalPrices({
+        ...options,
+        count
+      });
+    } catch (error) {
+      lastError = error;
+      if (!/invalid\.max/i.test(error.message)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 function normalizeResolutions(resolutions, fallbackResolution) {
