@@ -1,5 +1,6 @@
 .env
 logs/*.json
+logs/*.log
 reports/
 share/
 node_modules/
