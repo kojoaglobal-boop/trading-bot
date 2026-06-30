@@ -67,6 +67,7 @@ test("CapitalClient creates a session and sends CST security headers", async () 
   assert.equal(JSON.parse(requests[0].options.body).identifier, "kojo@example.com");
   assert.equal(requests[1].options.headers.CST, "cst-1");
   assert.equal(requests[1].options.headers["X-SECURITY-TOKEN"], "security-1");
+  assert.equal(requests[1].options.headers["Content-Type"], "application/json");
 });
 
 test("CapitalClient can list, create, confirm, and close demo positions", async () => {

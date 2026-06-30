@@ -4,6 +4,7 @@ import { defaultConfig } from "../config/default.js";
 import { CapitalClient, formatCapitalDealResult } from "../integrations/capital-client.js";
 import { fetchCapitalPrices } from "./capital-market-data.js";
 import { runGoldPaperCycle } from "./gold-paper-cycle.js";
+import { aggregateBars } from "../strategies/gold-trendline.js";
 
 const DEFAULT_PULLBACK_OPTIONS = {
   targetRR: 2,
@@ -407,19 +408,88 @@ async function loadGoldTimeframeBars({
     }
   }
 
-  return Promise.all(normalizedResolutions.map(async (item) => {
-    const result = await fetchCapitalPrices({
-      client,
-      epic,
+  return fetchReducedCapitalTimeframes({
+    client,
+    epic,
+    resolutions: normalizedResolutions,
+    count
+  });
+}
+
+async function fetchReducedCapitalTimeframes({
+  client,
+  epic,
+  resolutions,
+  count
+}) {
+  const byResolution = new Map();
+  const directFetches = [];
+  const higherFromFive = resolutions.filter((item) => ["MINUTE_15", "MINUTE_30"].includes(item));
+
+  if (resolutions.includes("MINUTE")) {
+    directFetches.push((async () => {
+      const result = await fetchCapitalPrices({
+        client,
+        epic,
+        resolution: "MINUTE",
+        count,
+        symbol: "XAU/USD"
+      });
+      byResolution.set("MINUTE", result.bars);
+    })());
+  }
+
+  if (resolutions.includes("MINUTE_5") || higherFromFive.length) {
+    directFetches.push((async () => {
+      const baseCount = Math.max(count, 500);
+      const result = await fetchCapitalPrices({
+        client,
+        epic,
+        resolution: "MINUTE_5",
+        count: baseCount,
+        symbol: "XAU/USD"
+      });
+      const fiveMinuteBars = result.bars;
+      if (resolutions.includes("MINUTE_5")) {
+        byResolution.set("MINUTE_5", fiveMinuteBars.slice(-count));
+      }
+      if (higherFromFive.includes("MINUTE_15")) {
+        byResolution.set("MINUTE_15", aggregateBars(fiveMinuteBars, 15).slice(-count));
+      }
+      if (higherFromFive.includes("MINUTE_30")) {
+        byResolution.set("MINUTE_30", aggregateBars(fiveMinuteBars, 30).slice(-count));
+      }
+    })());
+  }
+
+  const fallbackResolutions = resolutions.filter((item) => ![
+    "MINUTE",
+    "MINUTE_5",
+    "MINUTE_15",
+    "MINUTE_30"
+  ].includes(item));
+
+  for (const item of fallbackResolutions) {
+    directFetches.push((async () => {
+      const result = await fetchCapitalPrices({
+        client,
+        epic,
+        resolution: item,
+        count,
+        symbol: "XAU/USD"
+      });
+      byResolution.set(item, result.bars);
+    })());
+  }
+
+  await Promise.all(directFetches);
+
+  return resolutions
+    .filter((item) => byResolution.has(item))
+    .map((item) => ({
       resolution: item,
-      count,
-      symbol: "XAU/USD"
-    });
-    return {
-      resolution: item,
-      bars: result.bars
-    };
-  }));
+      bars: byResolution.get(item)
+    }));
 }
 
 function normalizeResolutions(resolutions, fallbackResolution) {

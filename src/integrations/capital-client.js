@@ -218,6 +218,7 @@ export class CapitalClient {
 
     const requestHeaders = {
       Accept: "application/json",
+      "Content-Type": "application/json",
       ...headers
     };
     if (auth) {
