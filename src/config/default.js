@@ -220,6 +220,15 @@ export const defaultConfig = {
       }
     }
   },
+  goldDemo: {
+    accountStartingCash: 1000,
+    dailyProfitTargetDollars: 250,
+    dailyMaxLossDollars: 100,
+    maxOpenPositions: 3,
+    defaultSize: 0.01,
+    intervalSeconds: 60,
+    closePositionsOnDailyGuard: true
+  },
   risk: {
     allowedAssetClasses: ["meme", "stock", "gold", "future", "forex"],
     maxOpenPositions: 6,

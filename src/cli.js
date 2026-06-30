@@ -465,25 +465,36 @@ async function runGoldCommand(args) {
   }
 
   if (subcommand === "capital-demo-loop") {
-    const loop = await runCapitalGoldDemoLoop({
-      client: new CapitalClient(),
-      epic: String(args.epic || "GOLD").trim().toUpperCase(),
-      resolution: String(args.resolution || args.granularity || "MINUTE_5"),
-      count: Number(args.count || args.limit || 300),
-      size: optionalNumber(args.size),
-      submitOrders: Boolean(args["confirm-capital-demo"]),
-      strategyOptions: {
-        targetRR: optionalNumber(args.targetRR || args["target-rr"]) || 2,
-        touchAtrMultiple: optionalNumber(args.touchAtrMultiple || args["touch-atr-multiple"]) || 0.75,
-        stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) || 2,
-        maxHoldBars: optionalNumber(args.maxHoldBars || args["max-hold-bars"]) || 12,
-        minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) || 0.00015
-      }
-    });
-    console.log(formatCapitalGoldDemoLoop(loop));
+    const intervalSeconds = Number(args.intervalSeconds || args["interval-seconds"] || defaultConfig.goldDemo.intervalSeconds);
+    const cycles = Number(args.cycles || 0);
+    const runOnce = async () => {
+      const loop = await runCapitalGoldDemoLoop(createGoldCapitalDemoLoopOptions(args));
+      console.log(formatCapitalGoldDemoLoop(loop));
 
-    if (!args["confirm-capital-demo"]) {
-      console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow a Capital.com demo order if the latest bar has a fresh entry.");
+      if (!args["confirm-capital-demo"]) {
+        console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow a Capital.com demo order if the latest bar has a fresh entry.");
+      }
+      return loop;
+    };
+
+    if (!args.loop) {
+      await runOnce();
+      return;
+    }
+
+    let completed = 0;
+    while (!cycles || completed < cycles) {
+      completed += 1;
+      await runOnce();
+
+      if (cycles && completed >= cycles) {
+        break;
+      }
+
+      const waitMs = Math.max(10, intervalSeconds) * 1000;
+      const nextRunAt = new Date(Date.now() + waitMs).toISOString();
+      console.log(`\nNext Gold Capital demo loop: ${nextRunAt}`);
+      await sleep(waitMs);
     }
     return;
   }
@@ -499,8 +510,34 @@ async function runGoldCommand(args) {
   node src/cli.js gold trendline-sweep
   node src/cli.js gold pullback-sweep
   node src/cli.js gold capital-demo-loop
+  node src/cli.js gold capital-demo-loop --loop --interval-seconds 60
   node src/cli.js gold capital-demo-loop --size 0.01 --confirm-capital-demo
+  node src/cli.js gold capital-demo-loop --loop --size 0.01 --confirm-capital-demo
 `);
+}
+
+function createGoldCapitalDemoLoopOptions(args) {
+  return {
+    client: new CapitalClient(),
+    epic: String(args.epic || "GOLD").trim().toUpperCase(),
+    resolution: String(args.resolution || args.granularity || "MINUTE_5"),
+    count: Number(args.count || args.limit || 300),
+    size: optionalNumber(args.size) ?? defaultConfig.goldDemo.defaultSize,
+    submitOrders: Boolean(args["confirm-capital-demo"]),
+    accountStartingCash: optionalNumber(args.accountStartingCash || args["account-starting-cash"]) ?? defaultConfig.goldDemo.accountStartingCash,
+    dailyProfitTargetDollars: optionalNumber(args.dailyProfitTargetDollars || args["daily-profit-target"]) ?? defaultConfig.goldDemo.dailyProfitTargetDollars,
+    dailyMaxLossDollars: optionalNumber(args.dailyMaxLossDollars || args["daily-max-loss"]) ?? defaultConfig.goldDemo.dailyMaxLossDollars,
+    maxOpenPositions: optionalNumber(args.maxOpenPositions || args["max-open-positions"]) ?? defaultConfig.goldDemo.maxOpenPositions,
+    closePositionsOnDailyGuard: !args["no-close-on-daily-guard"],
+    stateFile: args.stateFile || args["state-file"] || undefined,
+    strategyOptions: {
+      targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? 2,
+      touchAtrMultiple: optionalNumber(args.touchAtrMultiple || args["touch-atr-multiple"]) ?? 0.75,
+      stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) ?? 2,
+      maxHoldBars: optionalNumber(args.maxHoldBars || args["max-hold-bars"]) ?? 12,
+      minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) ?? 0.00015
+    }
+  };
 }
 
 async function runCapitalCommand(args) {
