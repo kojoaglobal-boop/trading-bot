@@ -29,6 +29,7 @@
     "oanda:account": "node src/cli.js oanda account",
     "oanda:instruments": "node src/cli.js oanda instruments",
     "oanda:xau": "node src/cli.js oanda candles --instrument XAU_USD --db",
+    "finnhub:news": "node src/cli.js finnhub news --symbol TSLA --limit 5",
     "crypto:coinbase": "node src/cli.js crypto bars --provider coinbase --product BTC-USD --db",
     "crypto:kraken": "node src/cli.js crypto bars --provider kraken --pair BTC/USD --db",
     "crypto:quality": "node src/cli.js crypto quality --symbol BTC/USD --db",

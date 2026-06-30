@@ -53,6 +53,10 @@ import {
   formatOandaInstruments,
   OandaClient
 } from "./integrations/oanda-client.js";
+import {
+  FinnhubClient,
+  formatFinnhubCompanyNews
+} from "./integrations/finnhub-client.js";
 import { MomentumBreakoutStrategy } from "./strategies/momentum-breakout.js";
 
 const DEFAULT_STOCK_SYMBOLS = defaultConfig.stockPaper.symbols.join(",");
@@ -133,6 +137,8 @@ try {
     await runCryptoCommand(args);
   } else if (command === "oanda") {
     await runOandaCommand(args);
+  } else if (command === "finnhub") {
+    await runFinnhubCommand(args);
   } else if (command === "export") {
     await runExportCommand(args);
   } else if (command === "scheduler") {
@@ -400,6 +406,30 @@ async function runOandaCommand(args) {
 `);
 }
 
+async function runFinnhubCommand(args) {
+  const subcommand = args._[1] || "help";
+  const client = new FinnhubClient();
+
+  if (subcommand === "news") {
+    const symbol = String(args.symbol || "TSLA").toUpperCase();
+    const days = Number(args.days || 3);
+    const to = args.to || formatDate(new Date());
+    const from = args.from || formatDate(new Date(Date.now() - days * 24 * 60 * 60 * 1000));
+    const news = await client.getCompanyNews({ symbol, from, to });
+    console.log(formatFinnhubCompanyNews(news, {
+      symbol,
+      limit: Number(args.limit || 8)
+    }));
+    return;
+  }
+
+  console.log(`Finnhub Commands
+================
+  node src/cli.js finnhub news --symbol TSLA
+  node src/cli.js finnhub news --symbol NVDA --days 7 --limit 5
+`);
+}
+
 async function runExportCommand(args) {
   const subcommand = args._[1] || "paper-ledger";
 
@@ -646,6 +676,7 @@ Usage:
   node src/cli.js alpaca sync
   node src/cli.js scheduler run-once --symbols AAPL,TSLA,NVDA --confirm-paper
   node src/cli.js oanda candles --instrument XAU_USD --db
+  node src/cli.js finnhub news --symbol TSLA
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js export paper-ledger
@@ -665,6 +696,7 @@ Commands:
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
   oanda      Pull OANDA practice candles for XAU/USD and forex pairs
+  finnhub    Pull stock news and catalysts through Finnhub
   export     Export database tracking files that open in Excel
   scheduler  Run the stock paper loop, broker sync, and Excel export together
   doctor     Print environment and safety-gate status
@@ -677,6 +709,10 @@ Options:
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function formatDate(date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function parseArgs(argv) {

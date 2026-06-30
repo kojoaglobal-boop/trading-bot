@@ -31,6 +31,16 @@ export const sourceCatalog = [
     purpose: "Stocks, ETFs, crypto, paper trading, and later broker execution."
   },
   {
+    id: "finnhub",
+    label: "Finnhub",
+    kind: "market-data",
+    mode: "news-and-catalysts",
+    covers: ["stock"],
+    requiredEnv: ["FINNHUB_API_KEY"],
+    cost: "free tier available; paid plans may be useful later",
+    purpose: "Company news and catalyst checks for stock selection before Alpaca paper trading."
+  },
+  {
     id: "coinbase",
     label: "Coinbase Advanced Trade",
     kind: "broker-and-data",

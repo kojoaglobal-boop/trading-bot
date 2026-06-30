@@ -132,6 +132,18 @@ node src/cli.js alpaca clock
 node src/cli.js alpaca bars --symbols AAPL,TSLA,NVDA
 ```
 
+For Finnhub stock news and catalyst checks, fill:
+
+```text
+FINNHUB_API_KEY=
+```
+
+Then verify the stock news connection:
+
+```powershell
+node src/cli.js finnhub news --symbol TSLA --limit 5
+```
+
 To prove order submission without intending to fill, run a guarded smoke test. It submits a deliberately low paper limit order and immediately cancels it:
 
 ```powershell
