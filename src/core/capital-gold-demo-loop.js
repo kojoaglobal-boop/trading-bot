@@ -17,8 +17,10 @@ const DEFAULT_STATE_FILE = "logs/capital-gold-demo-state.json";
 export async function runCapitalGoldDemoLoop({
   client = new CapitalClient(),
   bars,
+  barsByResolution,
   epic = "GOLD",
   resolution = "MINUTE_5",
+  resolutions = defaultConfig.goldDemo.timeframes,
   count = 300,
   size = defaultConfig.goldDemo.defaultSize,
   submitOrders = false,
@@ -29,6 +31,9 @@ export async function runCapitalGoldDemoLoop({
   dailyMaxLossDollars = defaultConfig.goldDemo.dailyMaxLossDollars,
   maxOpenPositions = defaultConfig.goldDemo.maxOpenPositions,
   closePositionsOnDailyGuard = defaultConfig.goldDemo.closePositionsOnDailyGuard,
+  maxSignalAgeBars = defaultConfig.goldDemo.maxSignalAgeBars,
+  maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
+  allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
   stateFile = DEFAULT_STATE_FILE,
   state,
   writeState = stateFile !== false
@@ -37,13 +42,19 @@ export async function runCapitalGoldDemoLoop({
     throw new Error(`Refusing Capital.com order because CAPITAL_ENV is ${client.environment}; demo only is allowed here.`);
   }
 
-  const priceBars = bars || (await fetchCapitalPrices({
+  const timeframeBars = await loadGoldTimeframeBars({
     client,
+    bars,
+    barsByResolution,
     epic,
     resolution,
-    count,
-    symbol: "XAU/USD"
-  })).bars;
+    resolutions,
+    count
+  });
+  const primaryTimeframe = timeframeBars[0] || {
+    resolution: normalizeResolution(resolution),
+    bars: []
+  };
   const [accountsPayload, positionsPayload] = await Promise.all([
     typeof client.getAccounts === "function" ? client.getAccounts() : { accounts: [] },
     client.getPositions()
@@ -70,45 +81,70 @@ export async function runCapitalGoldDemoLoop({
     dailyMaxLossDollars,
     closePositionsOnDailyGuard
   });
-  const cycle = await runGoldPaperCycle({
-    bars: priceBars,
-    provider: "capital",
-    strategy: "pullback",
-    writeDatabase: false,
-    ...DEFAULT_PULLBACK_OPTIONS,
-    ...strategyOptions
-  });
   const mergedStrategyOptions = {
     ...DEFAULT_PULLBACK_OPTIONS,
     ...strategyOptions
   };
-  const decision = buildCapitalGoldDemoDecision({
-    bars: priceBars,
-    cycle,
-    epic,
-    openGoldPositions,
-    size,
-    strategyOptions: mergedStrategyOptions,
-    dailyGuard,
-    dailyState,
-    maxOpenPositions
-  });
+  const plannedOpenPositions = [...openGoldPositions];
+  const timeframeResults = [];
+
+  for (const timeframe of timeframeBars) {
+    const cycle = await runGoldPaperCycle({
+      bars: timeframe.bars,
+      provider: "capital",
+      strategy: "pullback",
+      writeDatabase: false,
+      ...DEFAULT_PULLBACK_OPTIONS,
+      ...strategyOptions
+    });
+    const decision = buildCapitalGoldDemoDecision({
+      bars: timeframe.bars,
+      cycle,
+      epic,
+      openGoldPositions: plannedOpenPositions,
+      size,
+      strategyOptions: mergedStrategyOptions,
+      dailyGuard,
+      dailyState,
+      maxOpenPositions,
+      maxSignalAgeBars,
+      maxEntryDriftBps,
+      allowTrendProbe,
+      dedupeScope: timeframe.resolution
+    });
+    timeframeResults.push({
+      resolution: timeframe.resolution,
+      bars: timeframe.bars,
+      cycle,
+      decision
+    });
+
+    if (decision.action === "OPEN") {
+      plannedOpenPositions.push({
+        epic: String(epic).toUpperCase(),
+        direction: decision.order.direction,
+        size: decision.order.size,
+        level: timeframe.bars.at(-1)?.close || 0,
+        planned: true
+      });
+    }
+  }
+
+  const cycle = timeframeResults[0]?.cycle;
+  const entryDecisions = timeframeResults
+    .filter((result) => result.decision.action === "OPEN")
+    .map((result) => ({
+      ...result.decision,
+      resolution: result.resolution,
+      bars: result.bars
+    }));
+  const closeDecision = timeframeResults.find((result) => result.decision.action === "CLOSE_ALL")?.decision;
+  const decision = closeDecision || entryDecisions[0] || timeframeResults[0]?.decision || holdDecision("No Gold timeframe could be evaluated.");
 
   const submissions = [];
   const confirms = [];
   if (submitOrders) {
-    if (decision.action === "OPEN") {
-      const created = await client.createPosition(decision.order);
-      submissions.push(created);
-      if (created.dealReference) {
-        confirms.push(await client.getConfirm(created.dealReference));
-      }
-      dailyState.submittedEntryBarTimes = unique([
-        ...(dailyState.submittedEntryBarTimes || []),
-        decision.latestBarTime
-      ]).slice(-200);
-      dailyState.lastSubmittedEntryBarTime = decision.latestBarTime;
-    } else if (decision.action === "CLOSE_ALL") {
+    if (decision.action === "CLOSE_ALL") {
       for (const position of openGoldPositions) {
         if (!position.dealId) {
           continue;
@@ -118,6 +154,19 @@ export async function runCapitalGoldDemoLoop({
         if (closed.dealReference) {
           confirms.push(await client.getConfirm(closed.dealReference));
         }
+      }
+    } else if (entryDecisions.length) {
+      for (const entryDecision of entryDecisions) {
+        const created = await client.createPosition(entryDecision.order);
+        submissions.push(created);
+        if (created.dealReference) {
+          confirms.push(await client.getConfirm(created.dealReference));
+        }
+        dailyState.submittedEntryBarTimes = unique([
+          ...(dailyState.submittedEntryBarTimes || []),
+          entryDecision.dedupeKey || entryDecision.latestBarTime
+        ]).slice(-200);
+        dailyState.lastSubmittedEntryBarTime = entryDecision.latestBarTime;
       }
     }
   }
@@ -130,8 +179,9 @@ export async function runCapitalGoldDemoLoop({
     createdAt: now.toISOString(),
     mode: submitOrders ? "capital-demo-order-enabled" : "decision-only",
     epic,
-    resolution,
-    bars: priceBars,
+    resolution: primaryTimeframe.resolution,
+    resolutions: timeframeBars.map((timeframe) => timeframe.resolution),
+    bars: primaryTimeframe.bars,
     account,
     dailyGuard,
     dailyState,
@@ -139,6 +189,8 @@ export async function runCapitalGoldDemoLoop({
     openGoldPositions,
     cycle,
     decision,
+    timeframeResults,
+    entryDecisions,
     submissions,
     confirms,
     submitted: submissions[0] || null,
@@ -155,7 +207,11 @@ export function buildCapitalGoldDemoDecision({
   strategyOptions = DEFAULT_PULLBACK_OPTIONS,
   dailyGuard = activeGuard(),
   dailyState = {},
-  maxOpenPositions = defaultConfig.goldDemo.maxOpenPositions
+  maxOpenPositions = defaultConfig.goldDemo.maxOpenPositions,
+  maxSignalAgeBars = defaultConfig.goldDemo.maxSignalAgeBars,
+  maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
+  allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
+  dedupeScope = ""
 }) {
   const latestBar = bars.at(-1);
   if (!latestBar) {
@@ -178,25 +234,30 @@ export function buildCapitalGoldDemoDecision({
     return holdDecision(`Capital.com already has ${openGoldPositions.length}/${maxOpenPositions} open ${epic} demo position(s).`);
   }
 
-  const latestFill = cycle.report.fills.at(-1);
-  if (!latestFill || !["LONG_ENTRY", "SHORT_ENTRY"].includes(latestFill.intent)) {
-    return holdDecision("No fresh Gold pullback entry on the latest bar.");
-  }
-
-  if (latestFill.time !== latestBar.time) {
-    return holdDecision(`Last pullback entry was ${latestFill.time}; latest bar is ${latestBar.time}.`);
-  }
-
-  if ((dailyState.submittedEntryBarTimes || []).includes(latestFill.time)) {
-    return holdDecision(`Gold entry for candle ${latestFill.time} was already submitted.`);
-  }
-
   const orderSize = Number(size);
   if (!Number.isFinite(orderSize) || orderSize <= 0) {
     return holdDecision("No valid Capital.com demo size was configured.");
   }
 
-  const direction = latestFill.intent === "SHORT_ENTRY" ? "SELL" : "BUY";
+  const recentEntry = findRecentEntryFill({
+    fills: cycle.report.fills,
+    bars,
+    maxSignalAgeBars,
+    maxEntryDriftBps,
+    submittedEntryBarTimes: dailyState.submittedEntryBarTimes || [],
+    dedupeScope
+  });
+  const trendProbe = recentEntry ? null : buildTrendProbe({
+    bars,
+    submittedEntryBarTimes: dailyState.submittedEntryBarTimes || [],
+    dedupeScope
+  });
+  const setup = recentEntry || (allowTrendProbe ? trendProbe : null);
+
+  if (!setup) {
+    return holdDecision(`No tradable Gold setup. Last pullback signal age/drift failed and trend probe is ${allowTrendProbe ? "not aligned" : "disabled"}.`);
+  }
+
   const stopDistance = calculateStopDistance({
     bars,
     stopAtrMultiple: Number(strategyOptions.stopAtrMultiple || DEFAULT_PULLBACK_OPTIONS.stopAtrMultiple)
@@ -206,13 +267,15 @@ export function buildCapitalGoldDemoDecision({
 
   return {
     action: "OPEN",
-    reason: latestFill.reason || "fresh Gold pullback entry",
-    latestBarTime: latestBar.time,
+    reason: setup.reason,
+    latestBarTime: setup.latestBarTime,
+    dedupeKey: setup.dedupeKey,
+    setupType: setup.setupType,
     openPositionsAfterFill: openGoldPositions.length + 1,
     maxOpenPositions,
     order: {
       epic,
-      direction,
+      direction: setup.direction,
       size: orderSize,
       stopDistance: roundDistance(stopDistance),
       profitDistance: roundDistance(profitDistance)
@@ -222,12 +285,24 @@ export function buildCapitalGoldDemoDecision({
 
 export function formatCapitalGoldDemoLoop(result) {
   const lines = [];
+  const timeframeResults = result.timeframeResults || [];
+  const entryDecisions = result.entryDecisions || [];
+  const decisionAction = entryDecisions.length > 1
+    ? "OPEN_MULTIPLE"
+    : entryDecisions[0]?.action || result.decision.action;
+  const decisionReason = entryDecisions.length > 1
+    ? `${entryDecisions.length} Gold setup(s) across ${entryDecisions.map((decision) => decision.resolution).join(", ")}.`
+    : entryDecisions[0]?.reason || result.decision.reason;
+
   lines.push("Capital.com Gold Demo Loop");
   lines.push("==========================");
   lines.push(`Created:       ${result.createdAt}`);
   lines.push(`Mode:          ${result.mode}`);
   lines.push(`Epic:          ${result.epic}`);
   lines.push(`Resolution:    ${result.resolution}`);
+  if ((result.resolutions || []).length > 1) {
+    lines.push(`Timeframes:    ${result.resolutions.join(", ")}`);
+  }
   lines.push(`Bars:          ${result.bars.length}`);
   lines.push(`Latest bar:    ${result.bars.at(-1)?.time || "n/a"}`);
   lines.push(`Equity:        ${money(result.account.equity)} (${result.account.currency})`);
@@ -238,8 +313,17 @@ export function formatCapitalGoldDemoLoop(result) {
   lines.push(`Paper P/L:     ${money(result.cycle.report.account.netPnl)} (${pct(result.cycle.report.account.returnPct)})`);
   lines.push(`Paper trades:  ${result.cycle.report.metrics.closedTrades}`);
   lines.push(`Paper PF:      ${formatRatio(result.cycle.report.metrics.profitFactor)}`);
-  lines.push(`Decision:      ${result.decision.action}`);
-  lines.push(`Reason:        ${result.decision.reason}`);
+  lines.push(`Decision:      ${decisionAction}`);
+  lines.push(`Reason:        ${decisionReason}`);
+
+  if (timeframeResults.length > 1) {
+    lines.push("");
+    lines.push("Timeframe Decisions");
+    for (const timeframe of timeframeResults) {
+      const setup = timeframe.decision.setupType ? ` setup=${timeframe.decision.setupType}` : "";
+      lines.push(`  ${timeframe.resolution.padEnd(9)} ${timeframe.decision.action.padEnd(9)}${setup} ${timeframe.decision.reason}`);
+    }
+  }
 
   if (result.openGoldPositions.length) {
     lines.push("");
@@ -249,12 +333,24 @@ export function formatCapitalGoldDemoLoop(result) {
     }
   }
 
-  if (result.decision.order) {
+  const plannedDecisions = entryDecisions.length
+    ? entryDecisions
+    : result.decision.order
+      ? [result.decision]
+      : [];
+
+  if (plannedDecisions.length) {
     lines.push("");
-    lines.push("Planned Demo Order");
-    lines.push(`  ${result.decision.order.direction} ${result.decision.order.epic} size=${result.decision.order.size}`);
-    lines.push(`  stopDistance=${result.decision.order.stopDistance} profitDistance=${result.decision.order.profitDistance}`);
-    lines.push(`  would become position ${result.decision.openPositionsAfterFill}/${result.decision.maxOpenPositions}`);
+    lines.push(plannedDecisions.length === 1 ? "Planned Demo Order" : "Planned Demo Orders");
+    for (const planned of plannedDecisions) {
+      const prefix = planned.resolution ? `${planned.resolution} ` : "";
+      lines.push(`  ${prefix}${planned.order.direction} ${planned.order.epic} size=${planned.order.size}`);
+      lines.push(`    stopDistance=${planned.order.stopDistance} profitDistance=${planned.order.profitDistance}`);
+      lines.push(`    would become position ${planned.openPositionsAfterFill}/${planned.maxOpenPositions}`);
+      if (planned.setupType) {
+        lines.push(`    setup=${planned.setupType} key=${planned.dedupeKey || planned.latestBarTime}`);
+      }
+    }
   }
 
   if (result.submissions.length) {
@@ -278,6 +374,66 @@ export function formatCapitalGoldDemoLoop(result) {
   }
 
   return lines.join("\n");
+}
+
+async function loadGoldTimeframeBars({
+  client,
+  bars,
+  barsByResolution,
+  epic,
+  resolution,
+  resolutions,
+  count
+}) {
+  const normalizedResolutions = normalizeResolutions(resolutions, resolution);
+
+  if (bars) {
+    return [{
+      resolution: normalizedResolutions[0],
+      bars
+    }];
+  }
+
+  if (barsByResolution) {
+    const provided = normalizedResolutions
+      .map((item) => ({
+        resolution: item,
+        bars: barsByResolution[item] || barsByResolution[item.toLowerCase()]
+      }))
+      .filter((item) => Array.isArray(item.bars));
+
+    if (provided.length) {
+      return provided;
+    }
+  }
+
+  return Promise.all(normalizedResolutions.map(async (item) => {
+    const result = await fetchCapitalPrices({
+      client,
+      epic,
+      resolution: item,
+      count,
+      symbol: "XAU/USD"
+    });
+    return {
+      resolution: item,
+      bars: result.bars
+    };
+  }));
+}
+
+function normalizeResolutions(resolutions, fallbackResolution) {
+  const raw = Array.isArray(resolutions)
+    ? resolutions
+    : String(resolutions || fallbackResolution || "MINUTE_5").split(",");
+  const normalized = raw
+    .map((item) => normalizeResolution(item))
+    .filter(Boolean);
+  return unique(normalized.length ? normalized : [normalizeResolution(fallbackResolution)]);
+}
+
+function normalizeResolution(value) {
+  return String(value || "MINUTE_5").trim().toUpperCase();
 }
 
 function extractOpenPositions(payload, epic) {
@@ -422,6 +578,117 @@ function activeGuard() {
     dailyMaxLossDollars: defaultConfig.goldDemo.dailyMaxLossDollars,
     closePositionsOnDailyGuard: defaultConfig.goldDemo.closePositionsOnDailyGuard
   });
+}
+
+function findRecentEntryFill({
+  fills,
+  bars,
+  maxSignalAgeBars,
+  maxEntryDriftBps,
+  submittedEntryBarTimes,
+  dedupeScope
+}) {
+  const latestBar = bars.at(-1);
+  const latestBarIndex = bars.length - 1;
+  const barIndexByTime = new Map(bars.map((bar, index) => [bar.time, index]));
+  const maxAge = Math.max(0, Number(maxSignalAgeBars || 0));
+
+  for (const fill of [...fills].reverse()) {
+    if (!["LONG_ENTRY", "SHORT_ENTRY"].includes(fill.intent)) {
+      continue;
+    }
+
+    const dedupeKey = scopedDedupeKey(dedupeScope, fill.time);
+    if (submittedEntryBarTimes.includes(dedupeKey) || submittedEntryBarTimes.includes(fill.time)) {
+      continue;
+    }
+
+    const fillIndex = barIndexByTime.get(fill.time);
+    if (fillIndex === undefined) {
+      continue;
+    }
+
+    const ageBars = latestBarIndex - fillIndex;
+    if (ageBars < 0 || ageBars > maxAge) {
+      continue;
+    }
+
+    const direction = fill.intent === "SHORT_ENTRY" ? "SELL" : "BUY";
+    const currentEntryPrice = direction === "BUY"
+      ? latestBar.ask || latestBar.close
+      : latestBar.bid || latestBar.close;
+    const driftBps = Math.abs((currentEntryPrice - fill.price) / fill.price) * 10000;
+    if (driftBps > Number(maxEntryDriftBps || 0)) {
+      continue;
+    }
+
+    return {
+      setupType: ageBars === 0 ? "fresh-pullback" : "recent-pullback",
+      direction,
+      latestBarTime: fill.time,
+      dedupeKey,
+      reason: ageBars === 0
+        ? fill.reason || "fresh Gold pullback entry"
+        : `${fill.reason || "Gold pullback entry"} accepted ${ageBars} bars late (${driftBps.toFixed(1)} bps drift)`
+    };
+  }
+
+  return null;
+}
+
+function buildTrendProbe({ bars, submittedEntryBarTimes, dedupeScope }) {
+  const latestBar = bars.at(-1);
+  const previous = bars.at(-2);
+  if (bars.length < 80 || !latestBar || !previous) {
+    return null;
+  }
+
+  const closes = bars.map((bar) => bar.close);
+  const fast = ema(closes, 9);
+  const pullback = ema(closes, 21);
+  const trend = ema(closes, 50);
+  const atr = averageTrueRange(bars.slice(-15));
+  const atrPct = latestBar.close > 0 ? atr / latestBar.close : 0;
+  const bullish = fast > pullback && pullback > trend && latestBar.close > previous.close && latestBar.close > fast;
+  const bearish = fast < pullback && pullback < trend && latestBar.close < previous.close && latestBar.close < fast;
+
+  if (atrPct < 0.00015 || atrPct > 0.008) {
+    return null;
+  }
+
+  const direction = bullish ? "BUY" : bearish ? "SELL" : null;
+  if (!direction) {
+    return null;
+  }
+
+  const rawDedupeKey = `trend-probe:${latestBar.time}:${direction}`;
+  const dedupeKey = scopedDedupeKey(dedupeScope, rawDedupeKey);
+  if (submittedEntryBarTimes.includes(dedupeKey) || submittedEntryBarTimes.includes(rawDedupeKey)) {
+    return null;
+  }
+
+  return {
+    setupType: "trend-probe",
+    direction,
+    latestBarTime: latestBar.time,
+    dedupeKey,
+    reason: `aggressive Gold trend-probe ${direction.toLowerCase()} with EMA stack and ATR ${atrPct.toFixed(5)}`
+  };
+}
+
+function scopedDedupeKey(scope, key) {
+  const normalizedScope = String(scope || "").trim().toUpperCase();
+  return normalizedScope ? `${normalizedScope}:${key}` : key;
+}
+
+function ema(values, period) {
+  const slice = values.slice(-Math.max(period * 3, period));
+  const multiplier = 2 / (period + 1);
+  let current = slice[0];
+  for (const value of slice.slice(1)) {
+    current = value * multiplier + current * (1 - multiplier);
+  }
+  return current;
 }
 
 function calculateStopDistance({ bars, stopAtrMultiple }) {

@@ -227,7 +227,11 @@ export const defaultConfig = {
     maxOpenPositions: 3,
     defaultSize: 0.01,
     intervalSeconds: 60,
-    closePositionsOnDailyGuard: true
+    closePositionsOnDailyGuard: true,
+    timeframes: ["MINUTE", "MINUTE_5", "MINUTE_15", "MINUTE_30"],
+    maxSignalAgeBars: 6,
+    maxEntryDriftBps: 30,
+    allowTrendProbe: true
   },
   risk: {
     allowedAssetClasses: ["meme", "stock", "gold", "future", "forex"],

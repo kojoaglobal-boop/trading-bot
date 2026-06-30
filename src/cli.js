@@ -472,7 +472,7 @@ async function runGoldCommand(args) {
       console.log(formatCapitalGoldDemoLoop(loop));
 
       if (!args["confirm-capital-demo"]) {
-        console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow a Capital.com demo order if the latest bar has a fresh entry.");
+        console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow Capital.com demo orders from approved Gold setups.");
       }
       return loop;
     };
@@ -485,13 +485,22 @@ async function runGoldCommand(args) {
     let completed = 0;
     while (!cycles || completed < cycles) {
       completed += 1;
-      await runOnce();
+      let lastError = null;
+      try {
+        await runOnce();
+      } catch (error) {
+        lastError = error;
+        console.error(`\nGold Capital demo loop error: ${error.message}`);
+      }
 
       if (cycles && completed >= cycles) {
         break;
       }
 
-      const waitMs = Math.max(10, intervalSeconds) * 1000;
+      const cooldownSeconds = lastError && /429|too-many/i.test(lastError.message)
+        ? Math.max(intervalSeconds, 300)
+        : intervalSeconds;
+      const waitMs = Math.max(10, cooldownSeconds) * 1000;
       const nextRunAt = new Date(Date.now() + waitMs).toISOString();
       console.log(`\nNext Gold Capital demo loop: ${nextRunAt}`);
       await sleep(waitMs);
@@ -510,17 +519,26 @@ async function runGoldCommand(args) {
   node src/cli.js gold trendline-sweep
   node src/cli.js gold pullback-sweep
   node src/cli.js gold capital-demo-loop
+  node src/cli.js gold capital-demo-loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30
   node src/cli.js gold capital-demo-loop --loop --interval-seconds 60
   node src/cli.js gold capital-demo-loop --size 0.01 --confirm-capital-demo
-  node src/cli.js gold capital-demo-loop --loop --size 0.01 --confirm-capital-demo
+  node src/cli.js gold capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 0.01 --confirm-capital-demo
 `);
 }
 
 function createGoldCapitalDemoLoopOptions(args) {
+  const configuredTimeframes = args.timeframes
+    || args.resolutions
+    || args.resolution
+    || args.granularity
+    || defaultConfig.goldDemo.timeframes.join(",");
+  const resolutions = parseList(configuredTimeframes);
+
   return {
     client: new CapitalClient(),
     epic: String(args.epic || "GOLD").trim().toUpperCase(),
-    resolution: String(args.resolution || args.granularity || "MINUTE_5"),
+    resolution: resolutions[0] || String(args.resolution || args.granularity || "MINUTE_5"),
+    resolutions,
     count: Number(args.count || args.limit || 300),
     size: optionalNumber(args.size) ?? defaultConfig.goldDemo.defaultSize,
     submitOrders: Boolean(args["confirm-capital-demo"]),
@@ -529,6 +547,9 @@ function createGoldCapitalDemoLoopOptions(args) {
     dailyMaxLossDollars: optionalNumber(args.dailyMaxLossDollars || args["daily-max-loss"]) ?? defaultConfig.goldDemo.dailyMaxLossDollars,
     maxOpenPositions: optionalNumber(args.maxOpenPositions || args["max-open-positions"]) ?? defaultConfig.goldDemo.maxOpenPositions,
     closePositionsOnDailyGuard: !args["no-close-on-daily-guard"],
+    maxSignalAgeBars: optionalNumber(args.maxSignalAgeBars || args["max-signal-age-bars"]) ?? defaultConfig.goldDemo.maxSignalAgeBars,
+    maxEntryDriftBps: optionalNumber(args.maxEntryDriftBps || args["max-entry-drift-bps"]) ?? defaultConfig.goldDemo.maxEntryDriftBps,
+    allowTrendProbe: !args["no-trend-probe"],
     stateFile: args.stateFile || args["state-file"] || undefined,
     strategyOptions: {
       targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? 2,
