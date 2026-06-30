@@ -86,6 +86,20 @@ test("runGoldPaperCycle can run the Gold trendline strategy", async () => {
   assert.equal(cycle.report.metrics.bars, 160);
 });
 
+test("runGoldPaperCycle can run the Gold pullback strategy", async () => {
+  const cycle = await runGoldPaperCycle({
+    strategy: "pullback",
+    sample: true,
+    count: 180,
+    writeDatabase: false,
+    now: new Date("2026-01-01T12:00:00Z")
+  });
+
+  assert.equal(cycle.strategy, "pullback");
+  assert.equal(cycle.mode, "gold-paper-sample");
+  assert.equal(cycle.report.metrics.bars, 180);
+});
+
 test("gold sample bars use gold-scale prices", () => {
   const bars = createSampleBars({
     symbols: [{

@@ -97,8 +97,8 @@ export class RiskEngine {
     const currentClassExposure = snapshot.exposure[bar.assetClass] || 0;
     const maxClassExposure = snapshot.equity * (this.config.maxAssetClassExposurePct[bar.assetClass] ?? 0.2);
     const availableClassExposure = Math.max(0, maxClassExposure - currentClassExposure);
-    const availableCash = Math.max(0, snapshot.cash * 0.98);
-    const notional = Math.min(riskBasedNotional, maxNotional, availableClassExposure, availableCash);
+    const availableBuyingPower = this.calculateAvailableBuyingPower({ bar, snapshot });
+    const notional = Math.min(riskBasedNotional, maxNotional, availableClassExposure, availableBuyingPower);
 
     if (notional <= 0) {
       return reject("no capacity for this trade");
@@ -137,6 +137,19 @@ export class RiskEngine {
     const pctBudget = snapshot.equity * this.config.maxRiskPerTradePct;
     const targetBudget = Number(this.config.targetRiskPerTradeDollars || 0);
     return targetBudget > 0 ? targetBudget : pctBudget;
+  }
+
+  calculateAvailableBuyingPower({ bar, snapshot }) {
+    const maxGrossLeverage = Number(this.config.maxGrossLeverage?.[bar.assetClass] || 1);
+
+    if (maxGrossLeverage <= 1) {
+      return Math.max(0, snapshot.cash * 0.98);
+    }
+
+    const grossExposure = Object.values(snapshot.exposure || {})
+      .reduce((sum, exposure) => sum + Math.abs(Number(exposure) || 0), 0);
+    const maxGrossExposure = snapshot.equity * maxGrossLeverage;
+    return Math.max(0, maxGrossExposure - grossExposure);
   }
 
   createExitOrder({ bar, portfolio, signal }) {

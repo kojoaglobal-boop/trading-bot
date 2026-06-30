@@ -37,6 +37,8 @@
     "gold:capital": "node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5",
     "gold:trendline": "node src/cli.js gold paper-cycle --strategy trendline --provider capital --epic GOLD --granularity M5",
     "gold:trendline-sweep": "node src/cli.js gold trendline-sweep",
+    "gold:pullback": "node src/cli.js gold paper-cycle --strategy pullback --provider capital --epic GOLD --granularity M5",
+    "gold:pullback-sweep": "node src/cli.js gold pullback-sweep",
     "finnhub:news": "node src/cli.js finnhub news --symbol TSLA --limit 5",
     "crypto:coinbase": "node src/cli.js crypto bars --provider coinbase --product BTC-USD --db",
     "crypto:kraken": "node src/cli.js crypto bars --provider kraken --pair BTC/USD --db",

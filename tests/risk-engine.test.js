@@ -108,6 +108,59 @@ test("risk engine records target reward and planned risk on approved buys", () =
   assert.equal(result.order.targetProfitDollars, 10.9375);
 });
 
+test("risk engine can use controlled gross leverage for paper CFD sizing", () => {
+  const risk = new RiskEngine({
+    ...defaultConfig.risk,
+    allowedAssetClasses: ["gold"],
+    maxOpenPositions: 1,
+    maxRiskPerTradePct: 0.04,
+    maxNotionalPerTradePct: 2,
+    maxAssetClassExposurePct: {
+      ...defaultConfig.risk.maxAssetClassExposurePct,
+      gold: 2
+    },
+    maxGrossLeverage: {
+      ...defaultConfig.risk.maxGrossLeverage,
+      gold: 3
+    },
+    maxSpreadBps: {
+      ...defaultConfig.risk.maxSpreadBps,
+      gold: 12
+    },
+    minVolume: {
+      ...defaultConfig.risk.minVolume,
+      gold: 1
+    }
+  });
+  const portfolio = new Portfolio({ startingCash: 500 });
+
+  const result = risk.createOrder({
+    bar: {
+      time: new Date().toISOString(),
+      symbol: "XAU/USD",
+      assetClass: "gold",
+      open: 4000,
+      high: 4010,
+      low: 3990,
+      close: 4000,
+      volume: 100,
+      bid: 3999.8,
+      ask: 4000.2
+    },
+    markPrices: new Map([["XAU/USD", 4000]]),
+    portfolio,
+    signal: {
+      action: "BUY",
+      reason: "gold paper leverage test",
+      stopLossPct: 0.002
+    }
+  });
+
+  assert.equal(result.approved, true);
+  assert.equal(result.order.notional > 490, true);
+  assert.equal(result.order.notional <= 1000, true);
+});
+
 test("risk engine allows exits even when spread is too wide for entries", () => {
   const risk = new RiskEngine(defaultConfig.risk);
   const portfolio = new Portfolio({ startingCash: 100000 });

@@ -1,4 +1,5 @@
 import { defaultConfig } from "../config/default.js";
+import { GoldPullbackStrategy } from "../strategies/gold-pullback.js";
 import { GoldTrendlineStrategy } from "../strategies/gold-trendline.js";
 import { MomentumBreakoutStrategy } from "../strategies/momentum-breakout.js";
 import { createAuditRecord } from "./audit-log.js";
@@ -35,7 +36,7 @@ export async function runGoldPaperCycle(options = {}) {
 
   const report = runBacktest({
     bars,
-    broker: new PaperBroker(defaultConfig.execution.paper),
+    broker: new PaperBroker(createGoldExecutionConfig(options, provider)),
     config: defaultConfig,
     mode,
     portfolio: new Portfolio({ startingCash: defaultConfig.account.startingCash }),
@@ -171,6 +172,10 @@ function defaultInstrumentForProvider(provider) {
 }
 
 function createGoldStrategy(strategyName, options) {
+  if (strategyName === "pullback") {
+    return new GoldPullbackStrategy(createGoldPullbackStrategyConfig(options));
+  }
+
   if (strategyName === "trendline") {
     return new GoldTrendlineStrategy(createGoldTrendlineStrategyConfig(options));
   }
@@ -187,6 +192,26 @@ function createGoldMomentumStrategyConfig(options) {
     minVolumeExpansion: Number(options.minVolumeExpansion || options["min-volume-expansion"] || 0.85),
     stopLossPct: Number(options.stopLossPct || options["stop-loss-pct"] || 0.004),
     takeProfitRR: Number(options.targetRewardRiskRatio || options.targetRR || options["target-rr"] || 1.6)
+  };
+}
+
+function createGoldPullbackStrategyConfig(options) {
+  const defaults = defaultConfig.strategy.goldPullback;
+  return {
+    ...defaults,
+    fastPeriod: numberOption(options, ["fastPeriod", "fast-period"], defaults.fastPeriod),
+    pullbackPeriod: numberOption(options, ["pullbackPeriod", "pullback-period"], defaults.pullbackPeriod),
+    trendPeriod: numberOption(options, ["trendPeriod", "trend-period"], defaults.trendPeriod),
+    atrPeriod: numberOption(options, ["atrPeriod", "atr-period"], defaults.atrPeriod),
+    trendSlopeBars: numberOption(options, ["trendSlopeBars", "trend-slope-bars"], defaults.trendSlopeBars),
+    touchAtrMultiple: numberOption(options, ["touchAtrMultiple", "touch-atr-multiple"], defaults.touchAtrMultiple),
+    stopAtrMultiple: numberOption(options, ["stopAtrMultiple", "stop-atr-multiple"], defaults.stopAtrMultiple),
+    takeProfitRR: numberOption(options, ["targetRewardRiskRatio", "targetRR", "target-rr"], defaults.takeProfitRR),
+    maxHoldBars: numberOption(options, ["maxHoldBars", "max-hold-bars"], defaults.maxHoldBars),
+    minAtrPct: numberOption(options, ["minAtrPct", "min-atr-pct"], defaults.minAtrPct),
+    maxAtrPct: numberOption(options, ["maxAtrPct", "max-atr-pct"], defaults.maxAtrPct),
+    sessionUtcStartHour: numberOption(options, ["sessionUtcStartHour", "session-utc-start-hour"], defaults.sessionUtcStartHour),
+    sessionUtcEndHour: numberOption(options, ["sessionUtcEndHour", "session-utc-end-hour"], defaults.sessionUtcEndHour)
   };
 }
 
@@ -211,18 +236,29 @@ function createGoldTrendlineStrategyConfig(options) {
 }
 
 function createGoldRiskConfig(options) {
+  const strategyName = String(options.strategy || "").toLowerCase();
+  const provider = String(options.provider || "").toLowerCase();
+  const capitalPullbackPaper = provider === "capital" && strategyName === "pullback";
+  const defaultMaxNotionalPct = capitalPullbackPaper ? 2 : 0.35;
+  const defaultGoldExposurePct = capitalPullbackPaper ? 2 : 0.45;
+  const defaultGrossLeverage = capitalPullbackPaper ? 3 : defaultConfig.risk.maxGrossLeverage.gold;
+
   return {
     ...defaultConfig.risk,
     maxOpenPositions: Number(options.maxOpenPositions || options["max-open-positions"] || 1),
-    maxRiskPerTradePct: Number(options.maxRiskPerTradePct || options["max-risk-pct"] || 0.015),
-    maxNotionalPerTradePct: Number(options.maxNotionalPerTradePct || options["max-notional-pct"] || 0.35),
+    maxRiskPerTradePct: numberOption(options, ["maxRiskPerTradePct", "max-risk-pct"], capitalPullbackPaper ? 0.04 : 0.015),
+    maxNotionalPerTradePct: numberOption(options, ["maxNotionalPerTradePct", "max-notional-pct"], defaultMaxNotionalPct),
     maxAssetClassExposurePct: {
       ...defaultConfig.risk.maxAssetClassExposurePct,
-      gold: Number(options.maxGoldExposurePct || options["max-gold-exposure-pct"] || 0.45)
+      gold: numberOption(options, ["maxGoldExposurePct", "max-gold-exposure-pct"], defaultGoldExposurePct)
     },
     allowShorts: {
       ...defaultConfig.risk.allowShorts,
-      gold: String(options.strategy || "").toLowerCase() === "trendline"
+      gold: ["trendline", "pullback"].includes(strategyName)
+    },
+    maxGrossLeverage: {
+      ...defaultConfig.risk.maxGrossLeverage,
+      gold: numberOption(options, ["maxGrossLeverage", "max-gross-leverage"], defaultGrossLeverage)
     },
     maxSpreadBps: {
       ...defaultConfig.risk.maxSpreadBps,
@@ -232,8 +268,41 @@ function createGoldRiskConfig(options) {
       ...defaultConfig.risk.minVolume,
       gold: Number(options.minVolume || options["min-volume"] || 1)
     },
+    targetRiskPerTradeDollars: numberOption(options, ["targetRiskDollars", "target-risk-dollars"], 0),
     targetRewardRiskRatio: Number(options.targetRewardRiskRatio || options.targetRR || options["target-rr"] || 1.6)
   };
+}
+
+function createGoldExecutionConfig(options, provider) {
+  const defaults = provider === "capital"
+    ? {
+        ...defaultConfig.execution.paper,
+        ...defaultConfig.execution.goldCapitalPaper,
+        slippageBps: {
+          ...defaultConfig.execution.paper.slippageBps,
+          ...defaultConfig.execution.goldCapitalPaper.slippageBps
+        }
+      }
+    : defaultConfig.execution.paper;
+
+  return {
+    ...defaults,
+    commissionBps: numberOption(options, ["commissionBps", "commission-bps"], defaults.commissionBps),
+    minCommission: numberOption(options, ["minCommission", "min-commission"], defaults.minCommission),
+    slippageBps: {
+      ...defaults.slippageBps,
+      gold: numberOption(options, ["slippageBps", "slippage-bps"], defaults.slippageBps.gold)
+    }
+  };
+}
+
+function numberOption(options, keys, fallback) {
+  for (const key of keys) {
+    if (options[key] !== undefined && options[key] !== null && options[key] !== "") {
+      return Number(options[key]);
+    }
+  }
+  return fallback;
 }
 
 function money(value) {

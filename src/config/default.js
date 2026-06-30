@@ -70,6 +70,21 @@ export const defaultConfig = {
       maxAtrPct: 0.008,
       sessionUtcStartHour: 6,
       sessionUtcEndHour: 20
+    },
+    goldPullback: {
+      fastPeriod: 9,
+      pullbackPeriod: 21,
+      trendPeriod: 50,
+      atrPeriod: 14,
+      trendSlopeBars: 6,
+      touchAtrMultiple: 0.75,
+      stopAtrMultiple: 2,
+      takeProfitRR: 2,
+      maxHoldBars: 24,
+      minAtrPct: 0.0002,
+      maxAtrPct: 0.008,
+      sessionUtcStartHour: 6,
+      sessionUtcEndHour: 20
     }
   },
   stockPaper: {
@@ -225,6 +240,13 @@ export const defaultConfig = {
       future: false,
       forex: false
     },
+    maxGrossLeverage: {
+      meme: 1,
+      stock: 1,
+      gold: 1,
+      future: 1,
+      forex: 1
+    },
     maxSpreadBps: {
       meme: 90,
       stock: 25,
@@ -251,6 +273,13 @@ export const defaultConfig = {
         forex: 2
       },
       minCommission: 0.25
+    },
+    goldCapitalPaper: {
+      commissionBps: 0,
+      slippageBps: {
+        gold: 1
+      },
+      minCommission: 0
     }
   }
 };

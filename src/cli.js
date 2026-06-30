@@ -22,6 +22,7 @@ import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
+import { formatGoldPullbackSweep, runGoldPullbackSweep } from "./core/gold-pullback-sweep.js";
 import { formatGoldTrendlineSweep, runGoldTrendlineSweep } from "./core/gold-trendline-sweep.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
@@ -417,8 +418,20 @@ async function runGoldCommand(args) {
       writeDatabase: !args["no-db"],
       targetRR: optionalNumber(args.targetRR || args["target-rr"]),
       stopLossPct: optionalNumber(args.stopLossPct || args["stop-loss-pct"]),
+      touchAtrMultiple: optionalNumber(args.touchAtrMultiple || args["touch-atr-multiple"]),
+      stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]),
+      maxHoldBars: optionalNumber(args.maxHoldBars || args["max-hold-bars"]),
+      minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]),
+      maxAtrPct: optionalNumber(args.maxAtrPct || args["max-atr-pct"]),
       maxSpreadBps: optionalNumber(args.maxSpreadBps || args["max-spread-bps"]),
-      minVolume: optionalNumber(args.minVolume || args["min-volume"])
+      minVolume: optionalNumber(args.minVolume || args["min-volume"]),
+      maxNotionalPerTradePct: optionalNumber(args.maxNotionalPerTradePct || args["max-notional-pct"]),
+      maxGoldExposurePct: optionalNumber(args.maxGoldExposurePct || args["max-gold-exposure-pct"]),
+      maxGrossLeverage: optionalNumber(args.maxGrossLeverage || args["max-gross-leverage"]),
+      targetRiskDollars: optionalNumber(args.targetRiskDollars || args["target-risk-dollars"]),
+      commissionBps: optionalNumber(args.commissionBps || args["commission-bps"]),
+      minCommission: optionalNumber(args.minCommission || args["min-commission"]),
+      slippageBps: optionalNumber(args.slippageBps || args["slippage-bps"])
     });
     console.log(formatGoldPaperCycle(cycle));
     return;
@@ -436,6 +449,18 @@ async function runGoldCommand(args) {
     return;
   }
 
+  if (subcommand === "pullback-sweep") {
+    const sweep = await runGoldPullbackSweep({
+      source: String(args.source || args.dbSource || args["db-source"] || "capital").toLowerCase(),
+      mode: String(args.mode || args.dbMode || args["db-mode"] || "demo-market-data"),
+      symbol: String(args.symbol || "XAU/USD").toUpperCase(),
+      limit: Number(args.limit || 1000),
+      maxResults: Number(args.maxResults || args["max-results"] || 12)
+    });
+    console.log(formatGoldPullbackSweep(sweep));
+    return;
+  }
+
   console.log(`Gold Commands
 =============
   node src/cli.js gold paper-cycle --sample --no-db
@@ -443,7 +468,9 @@ async function runGoldCommand(args) {
   node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
   node src/cli.js gold paper-cycle --provider capital --epic GOLD --granularity M5
   node src/cli.js gold paper-cycle --strategy trendline --provider capital --epic GOLD --granularity M5
+  node src/cli.js gold paper-cycle --strategy pullback --provider capital --epic GOLD --granularity M5
   node src/cli.js gold trendline-sweep
+  node src/cli.js gold pullback-sweep
 `);
 }
 
