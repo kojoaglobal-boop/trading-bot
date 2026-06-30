@@ -35,6 +35,7 @@ node src/cli.js alpaca paper-loop --db
 node src/cli.js alpaca sync
 node src/cli.js scheduler run-once --confirm-paper
 node src/cli.js oanda candles --instrument XAU_USD --db
+node src/cli.js gold paper-cycle --sample
 node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
 node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
 node src/cli.js crypto quality --symbol BTC/USD --db
@@ -65,6 +66,7 @@ npm run alpaca:smoke-order
 npm run alpaca:paper-loop
 npm run scheduler:once
 npm run oanda:xau
+npm run gold:sample
 npm run crypto:coinbase
 npm run crypto:kraken
 npm run crypto:quality
@@ -232,6 +234,20 @@ Pull Gold/USD candles through OANDA practice:
 ```powershell
 node src/cli.js oanda candles --instrument XAU_USD --db
 ```
+
+Run a Gold/USD paper cycle with deterministic sample data now:
+
+```powershell
+node src/cli.js gold paper-cycle --sample
+```
+
+Run the same Gold/USD paper cycle with OANDA practice market data once the API token is in `.env`:
+
+```powershell
+node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
+```
+
+The Gold/USD cycle is still paper research only. It fetches or generates XAU/USD bars, runs the strategy, applies the risk engine, simulates fills, writes market bars and audit results to Postgres, and does not place OANDA trades yet.
 
 OANDA credentials needed in `.env`:
 

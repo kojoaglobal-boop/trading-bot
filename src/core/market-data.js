@@ -13,6 +13,12 @@ const ASSET_PROFILES = {
     volume: 450000,
     spreadBps: 7
   },
+  gold: {
+    start: 2400,
+    volatility: 0.0065,
+    volume: 9000,
+    spreadBps: 8
+  },
   future: {
     start: 5200,
     volatility: 0.011,

@@ -20,6 +20,7 @@ import { formatAlpacaSync, syncAlpacaPaperState, writeAlpacaSyncToDatabase } fro
 import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-scheduler.js";
 import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
+import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
 import {
@@ -135,6 +136,8 @@ try {
     await runAlpacaCommand(args);
   } else if (command === "crypto") {
     await runCryptoCommand(args);
+  } else if (command === "gold") {
+    await runGoldCommand(args);
   } else if (command === "oanda") {
     await runOandaCommand(args);
   } else if (command === "finnhub") {
@@ -355,6 +358,34 @@ async function runCryptoCommand(args) {
   node src/cli.js crypto bars --provider coinbase --product PEPE-USD --db
   node src/cli.js crypto bars --provider kraken --pair BTC/USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
+`);
+}
+
+async function runGoldCommand(args) {
+  const subcommand = args._[1] || "paper-cycle";
+
+  if (subcommand === "paper-cycle") {
+    const cycle = await runGoldPaperCycle({
+      sample: Boolean(args.sample),
+      instrument: String(args.instrument || "XAU_USD"),
+      granularity: String(args.granularity || "M5"),
+      count: Number(args.count || args.limit || 300),
+      seed: Number(args.seed || 42),
+      writeDatabase: !args["no-db"],
+      targetRR: optionalNumber(args.targetRR || args["target-rr"]),
+      stopLossPct: optionalNumber(args.stopLossPct || args["stop-loss-pct"]),
+      maxSpreadBps: optionalNumber(args.maxSpreadBps || args["max-spread-bps"]),
+      minVolume: optionalNumber(args.minVolume || args["min-volume"])
+    });
+    console.log(formatGoldPaperCycle(cycle));
+    return;
+  }
+
+  console.log(`Gold Commands
+=============
+  node src/cli.js gold paper-cycle --sample --no-db
+  node src/cli.js gold paper-cycle --sample
+  node src/cli.js gold paper-cycle --instrument XAU_USD --granularity M5
 `);
 }
 
@@ -697,6 +728,7 @@ Usage:
   node src/cli.js alpaca sync
   node src/cli.js scheduler run-once --confirm-paper
   node src/cli.js oanda candles --instrument XAU_USD --db
+  node src/cli.js gold paper-cycle --sample
   node src/cli.js finnhub news --symbol TSLA
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
@@ -716,6 +748,7 @@ Commands:
   db         Show local Postgres database settings and commands
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
+  gold       Run Gold/USD paper-cycle research with sample or OANDA data
   oanda      Pull OANDA practice candles for XAU/USD and forex pairs
   finnhub    Pull stock news and catalysts through Finnhub
   export     Export database tracking files that open in Excel
