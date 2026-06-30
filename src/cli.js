@@ -550,6 +550,7 @@ function createGoldCapitalDemoLoopOptions(args) {
     maxSignalAgeBars: optionalNumber(args.maxSignalAgeBars || args["max-signal-age-bars"]) ?? defaultConfig.goldDemo.maxSignalAgeBars,
     maxEntryDriftBps: optionalNumber(args.maxEntryDriftBps || args["max-entry-drift-bps"]) ?? defaultConfig.goldDemo.maxEntryDriftBps,
     allowTrendProbe: !args["no-trend-probe"],
+    trendProbeMinBars: optionalNumber(args.trendProbeMinBars || args["trend-probe-min-bars"]) ?? defaultConfig.goldDemo.trendProbeMinBars,
     stateFile: args.stateFile || args["state-file"] || undefined,
     strategyOptions: {
       targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? 2,

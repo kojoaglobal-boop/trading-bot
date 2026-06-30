@@ -35,6 +35,7 @@ export async function runCapitalGoldDemoLoop({
   maxSignalAgeBars = defaultConfig.goldDemo.maxSignalAgeBars,
   maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
   allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
+  trendProbeMinBars = defaultConfig.goldDemo.trendProbeMinBars,
   stateFile = DEFAULT_STATE_FILE,
   state,
   writeState = stateFile !== false
@@ -111,6 +112,7 @@ export async function runCapitalGoldDemoLoop({
       maxSignalAgeBars,
       maxEntryDriftBps,
       allowTrendProbe,
+      trendProbeMinBars,
       dedupeScope: timeframe.resolution
     });
     timeframeResults.push({
@@ -212,6 +214,7 @@ export function buildCapitalGoldDemoDecision({
   maxSignalAgeBars = defaultConfig.goldDemo.maxSignalAgeBars,
   maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
   allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
+  trendProbeMinBars = defaultConfig.goldDemo.trendProbeMinBars,
   dedupeScope = ""
 }) {
   const latestBar = bars.at(-1);
@@ -251,7 +254,8 @@ export function buildCapitalGoldDemoDecision({
   const trendProbe = recentEntry ? null : buildTrendProbe({
     bars,
     submittedEntryBarTimes: dailyState.submittedEntryBarTimes || [],
-    dedupeScope
+    dedupeScope,
+    trendProbeMinBars
   });
   const setup = recentEntry || (allowTrendProbe ? trendProbe : null);
 
@@ -310,6 +314,7 @@ export function formatCapitalGoldDemoLoop(result) {
   lines.push(`Day start:     ${money(result.dailyState.dayStartEquity)}`);
   lines.push(`Daily P/L:     ${money(result.dailyGuard.dailyPnl)} / target ${money(result.dailyGuard.dailyProfitTargetDollars)} / max loss ${money(-result.dailyGuard.dailyMaxLossDollars)}`);
   lines.push(`Daily guard:   ${result.dailyGuard.status}`);
+  lines.push(`Recovery:      ${result.dailyGuard.recoveryMode ? "ACTIVE after loss, still hunting valid setups" : "idle"}`);
   lines.push(`Open demo pos: ${result.openGoldPositions.length}/${result.maxOpenPositions}`);
   lines.push(`Paper P/L:     ${money(result.cycle.report.account.netPnl)} (${pct(result.cycle.report.account.returnPct)})`);
   lines.push(`Paper trades:  ${result.cycle.report.metrics.closedTrades}`);
@@ -423,54 +428,33 @@ async function fetchReducedCapitalTimeframes({
   count
 }) {
   const byResolution = new Map();
-  const directFetches = [];
-  const higherFromFive = resolutions.filter((item) => ["MINUTE_15", "MINUTE_30"].includes(item));
+  const standardResolutions = ["MINUTE", "MINUTE_5", "MINUTE_15", "MINUTE_30"];
+  const canBuildFromMinute = resolutions.every((item) => standardResolutions.includes(item));
 
-  if (resolutions.includes("MINUTE")) {
-    directFetches.push((async () => {
-      const result = await fetchCapitalPrices({
-        client,
-        epic,
-        resolution: "MINUTE",
-        count,
-        symbol: "XAU/USD"
-      });
-      byResolution.set("MINUTE", result.bars);
-    })());
-  }
-
-  if (resolutions.includes("MINUTE_5") || higherFromFive.length) {
-    directFetches.push((async () => {
-      const baseCount = Math.max(count, 500);
-      const result = await fetchCapitalPrices({
-        client,
-        epic,
-        resolution: "MINUTE_5",
-        count: baseCount,
-        symbol: "XAU/USD"
-      });
-      const fiveMinuteBars = result.bars;
-      if (resolutions.includes("MINUTE_5")) {
-        byResolution.set("MINUTE_5", fiveMinuteBars.slice(-count));
-      }
-      if (higherFromFive.includes("MINUTE_15")) {
-        byResolution.set("MINUTE_15", aggregateBars(fiveMinuteBars, 15).slice(-count));
-      }
-      if (higherFromFive.includes("MINUTE_30")) {
-        byResolution.set("MINUTE_30", aggregateBars(fiveMinuteBars, 30).slice(-count));
-      }
-    })());
-  }
-
-  const fallbackResolutions = resolutions.filter((item) => ![
-    "MINUTE",
-    "MINUTE_5",
-    "MINUTE_15",
-    "MINUTE_30"
-  ].includes(item));
-
-  for (const item of fallbackResolutions) {
-    directFetches.push((async () => {
+  if (canBuildFromMinute) {
+    const baseCount = Math.max(count, Number(defaultConfig.goldDemo.baseMinuteBars || 1500));
+    const result = await fetchCapitalPrices({
+      client,
+      epic,
+      resolution: "MINUTE",
+      count: baseCount,
+      symbol: "XAU/USD"
+    });
+    const minuteBars = result.bars;
+    if (resolutions.includes("MINUTE")) {
+      byResolution.set("MINUTE", minuteBars.slice(-count));
+    }
+    if (resolutions.includes("MINUTE_5")) {
+      byResolution.set("MINUTE_5", aggregateBars(minuteBars, 5).slice(-count));
+    }
+    if (resolutions.includes("MINUTE_15")) {
+      byResolution.set("MINUTE_15", aggregateBars(minuteBars, 15).slice(-count));
+    }
+    if (resolutions.includes("MINUTE_30")) {
+      byResolution.set("MINUTE_30", aggregateBars(minuteBars, 30).slice(-count));
+    }
+  } else {
+    await Promise.all(resolutions.map(async (item) => {
       const result = await fetchCapitalPrices({
         client,
         epic,
@@ -479,10 +463,8 @@ async function fetchReducedCapitalTimeframes({
         symbol: "XAU/USD"
       });
       byResolution.set(item, result.bars);
-    })());
+    }));
   }
-
-  await Promise.all(directFetches);
 
   return resolutions
     .filter((item) => byResolution.has(item))
@@ -614,7 +596,8 @@ function buildDailyGuard({
     currentEquity,
     dailyPnl,
     dailyProfitTargetDollars,
-    dailyMaxLossDollars
+    dailyMaxLossDollars,
+    recoveryMode: dailyPnl < 0 && dailyPnl > -dailyMaxLossDollars
   };
 
   if (dailyPnl >= dailyProfitTargetDollars) {
@@ -706,10 +689,15 @@ function findRecentEntryFill({
   return null;
 }
 
-function buildTrendProbe({ bars, submittedEntryBarTimes, dedupeScope }) {
+function buildTrendProbe({
+  bars,
+  submittedEntryBarTimes,
+  dedupeScope,
+  trendProbeMinBars = defaultConfig.goldDemo.trendProbeMinBars
+}) {
   const latestBar = bars.at(-1);
   const previous = bars.at(-2);
-  if (bars.length < 80 || !latestBar || !previous) {
+  if (bars.length < Number(trendProbeMinBars || 50) || !latestBar || !previous) {
     return null;
   }
 
