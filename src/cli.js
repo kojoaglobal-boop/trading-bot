@@ -472,6 +472,7 @@ async function runGoldCommand(args) {
 
   if (subcommand === "capital-demo-loop") {
     const intervalSeconds = Number(args.intervalSeconds || args["interval-seconds"] || defaultConfig.goldDemo.intervalSeconds);
+    const jitterSeconds = Number(args.jitterSeconds || args["jitter-seconds"] || defaultConfig.goldDemo.loopJitterSeconds || 0);
     const cycles = Number(args.cycles || 0);
     const runOnce = async () => {
       const loop = await runCapitalGoldDemoLoop(createGoldCapitalDemoLoopOptions(args));
@@ -506,7 +507,7 @@ async function runGoldCommand(args) {
       const cooldownSeconds = lastError && /429|too-many/i.test(lastError.message)
         ? Math.max(intervalSeconds, 300)
         : intervalSeconds;
-      const waitMs = Math.max(10, cooldownSeconds) * 1000;
+      const waitMs = (Math.max(10, cooldownSeconds) + randomJitterSeconds(jitterSeconds)) * 1000;
       const nextRunAt = new Date(Date.now() + waitMs).toISOString();
       console.log(`\nNext Gold Capital demo loop: ${nextRunAt}`);
       await sleep(waitMs);
@@ -577,6 +578,7 @@ async function runOilCommand(args) {
 
   if (subcommand === "capital-demo-loop") {
     const intervalSeconds = Number(args.intervalSeconds || args["interval-seconds"] || defaultConfig.oilDemo.intervalSeconds);
+    const jitterSeconds = Number(args.jitterSeconds || args["jitter-seconds"] || defaultConfig.oilDemo.loopJitterSeconds || 0);
     const cycles = Number(args.cycles || 0);
     const runOnce = async () => {
       const loop = await runCapitalOilDemoLoop(createOilCapitalDemoLoopOptions(args));
@@ -611,7 +613,7 @@ async function runOilCommand(args) {
       const cooldownSeconds = lastError && /429|too-many/i.test(lastError.message)
         ? Math.max(intervalSeconds, 300)
         : intervalSeconds;
-      const waitMs = Math.max(10, cooldownSeconds) * 1000;
+      const waitMs = (Math.max(10, cooldownSeconds) + randomJitterSeconds(jitterSeconds)) * 1000;
       const nextRunAt = new Date(Date.now() + waitMs).toISOString();
       console.log(`\nNext Oil Capital demo loop: ${nextRunAt}`);
       await sleep(waitMs);
@@ -623,7 +625,7 @@ async function runOilCommand(args) {
 ============
   node src/cli.js oil capital-demo-loop
   node src/cli.js oil capital-demo-loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30
-  node src/cli.js oil capital-demo-loop --loop --interval-seconds 120
+  node src/cli.js oil capital-demo-loop --loop --interval-seconds 180
   node src/cli.js oil capital-demo-loop --size 10 --confirm-capital-demo
   node src/cli.js oil capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 10 --min-position-size 10 --confirm-capital-demo
 `);
@@ -1190,6 +1192,14 @@ Options:
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomJitterSeconds(maxSeconds) {
+  const max = Number(maxSeconds || 0);
+  if (!Number.isFinite(max) || max <= 0) {
+    return 0;
+  }
+  return Math.floor(Math.random() * max);
 }
 
 function formatDate(date) {

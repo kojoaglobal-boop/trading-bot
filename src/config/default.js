@@ -243,7 +243,8 @@ export const defaultConfig = {
     breakevenBufferDistance: 0.5,
     minMinutesBetweenEntries: 5,
     maxEntriesPerHour: 4,
-    maxDailyEntries: 20
+    maxDailyEntries: 20,
+    loopJitterSeconds: 20
   },
   oilDemo: {
     accountStartingCash: 1000,
@@ -252,7 +253,7 @@ export const defaultConfig = {
     maxOpenPositions: 2,
     defaultSize: 10,
     minPositionSize: 10,
-    intervalSeconds: 120,
+    intervalSeconds: 180,
     closePositionsOnDailyGuard: true,
     epic: "OIL_CRUDE",
     symbol: "WTI/USD",
@@ -279,7 +280,8 @@ export const defaultConfig = {
     inventoryBlackoutEndMinute: 10 * 60 + 55,
     minMinutesBetweenEntries: 6,
     maxEntriesPerHour: 3,
-    maxDailyEntries: 16
+    maxDailyEntries: 16,
+    loopJitterSeconds: 35
   },
   news: {
     stock: {
