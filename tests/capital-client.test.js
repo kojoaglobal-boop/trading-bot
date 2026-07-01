@@ -190,6 +190,30 @@ test("normalizeCapitalPrices maps GOLD prices to internal gold bars", () => {
   assert.match(formatCapitalPrices(bars), /XAU\/USD/);
 });
 
+test("normalizeCapitalPrices maps OIL_CRUDE prices to internal oil bars", () => {
+  const bars = normalizeCapitalPrices({
+    prices: [{
+      snapshotTimeUTC: "2026-01-01T10:00:00",
+      openPrice: { bid: 69.8, ask: 69.84 },
+      highPrice: { bid: 70.1, ask: 70.14 },
+      lowPrice: { bid: 69.5, ask: 69.54 },
+      closePrice: { bid: 69.9, ask: 69.94 },
+      lastTradedVolume: 55
+    }]
+  }, {
+    epic: "OIL_CRUDE",
+    resolution: "M5",
+    environment: "demo"
+  });
+
+  assert.equal(bars.length, 1);
+  assert.equal(bars[0].symbol, "WTI/USD");
+  assert.equal(bars[0].assetClass, "oil");
+  assert.equal(bars[0].venue, "capital-demo");
+  assert.equal(bars[0].close, 69.92);
+  assert.match(formatCapitalPrices(bars), /WTI\/USD/);
+});
+
 test("Capital helpers normalize resolutions and format market search results", () => {
   assert.equal(normalizeCapitalResolution("M5"), "MINUTE_5");
   assert.equal(normalizeCapitalResolution("H1"), "HOUR");

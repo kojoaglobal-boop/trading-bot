@@ -21,6 +21,7 @@ import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-sc
 import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
 import { formatCapitalGoldDemoLoop, runCapitalGoldDemoLoop } from "./core/capital-gold-demo-loop.js";
+import { formatCapitalOilDemoLoop, runCapitalOilDemoLoop } from "./core/capital-oil-demo-loop.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
 import { formatGoldPullbackSweep, runGoldPullbackSweep } from "./core/gold-pullback-sweep.js";
@@ -149,6 +150,8 @@ try {
     await runCryptoCommand(args);
   } else if (command === "gold") {
     await runGoldCommand(args);
+  } else if (command === "oil") {
+    await runOilCommand(args);
   } else if (command === "capital") {
     await runCapitalCommand(args);
   } else if (command === "oanda") {
@@ -559,6 +562,100 @@ function createGoldCapitalDemoLoopOptions(args) {
       stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) ?? 2,
       maxHoldBars: optionalNumber(args.maxHoldBars || args["max-hold-bars"]) ?? 12,
       minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) ?? 0.00015
+    }
+  };
+}
+
+async function runOilCommand(args) {
+  const subcommand = args._[1] || "help";
+
+  if (subcommand === "capital-demo-loop") {
+    const intervalSeconds = Number(args.intervalSeconds || args["interval-seconds"] || defaultConfig.oilDemo.intervalSeconds);
+    const cycles = Number(args.cycles || 0);
+    const runOnce = async () => {
+      const loop = await runCapitalOilDemoLoop(createOilCapitalDemoLoopOptions(args));
+      console.log(formatCapitalOilDemoLoop(loop));
+
+      if (!args["confirm-capital-demo"]) {
+        console.log("\nDecision-only mode. Add --confirm-capital-demo and --size to allow Capital.com demo orders from approved Oil setups.");
+      }
+      return loop;
+    };
+
+    if (!args.loop) {
+      await runOnce();
+      return;
+    }
+
+    let completed = 0;
+    while (!cycles || completed < cycles) {
+      completed += 1;
+      let lastError = null;
+      try {
+        await runOnce();
+      } catch (error) {
+        lastError = error;
+        console.error(`\nOil Capital demo loop error: ${error.message}`);
+      }
+
+      if (cycles && completed >= cycles) {
+        break;
+      }
+
+      const cooldownSeconds = lastError && /429|too-many/i.test(lastError.message)
+        ? Math.max(intervalSeconds, 300)
+        : intervalSeconds;
+      const waitMs = Math.max(10, cooldownSeconds) * 1000;
+      const nextRunAt = new Date(Date.now() + waitMs).toISOString();
+      console.log(`\nNext Oil Capital demo loop: ${nextRunAt}`);
+      await sleep(waitMs);
+    }
+    return;
+  }
+
+  console.log(`Oil Commands
+============
+  node src/cli.js oil capital-demo-loop
+  node src/cli.js oil capital-demo-loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30
+  node src/cli.js oil capital-demo-loop --loop --interval-seconds 120
+  node src/cli.js oil capital-demo-loop --size 1 --confirm-capital-demo
+  node src/cli.js oil capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 1 --min-position-size 1 --confirm-capital-demo
+`);
+}
+
+function createOilCapitalDemoLoopOptions(args) {
+  const configuredTimeframes = args.timeframes
+    || args.resolutions
+    || args.resolution
+    || args.granularity
+    || defaultConfig.oilDemo.timeframes.join(",");
+  const resolutions = parseList(configuredTimeframes);
+
+  return {
+    client: new CapitalClient(),
+    epic: String(args.epic || defaultConfig.oilDemo.epic).trim().toUpperCase(),
+    symbol: String(args.symbol || defaultConfig.oilDemo.symbol).trim().toUpperCase(),
+    resolution: resolutions[0] || String(args.resolution || args.granularity || "MINUTE_5"),
+    resolutions,
+    count: Number(args.count || args.limit || 300),
+    size: optionalNumber(args.size) ?? defaultConfig.oilDemo.defaultSize,
+    minPositionSize: optionalNumber(args.minPositionSize || args["min-position-size"]) ?? defaultConfig.oilDemo.minPositionSize,
+    submitOrders: Boolean(args["confirm-capital-demo"]),
+    accountStartingCash: optionalNumber(args.accountStartingCash || args["account-starting-cash"]) ?? defaultConfig.oilDemo.accountStartingCash,
+    dailyProfitTargetDollars: optionalNumber(args.dailyProfitTargetDollars || args["daily-profit-target"]) ?? defaultConfig.oilDemo.dailyProfitTargetDollars,
+    dailyMaxLossDollars: optionalNumber(args.dailyMaxLossDollars || args["daily-max-loss"]) ?? defaultConfig.oilDemo.dailyMaxLossDollars,
+    maxOpenPositions: optionalNumber(args.maxOpenPositions || args["max-open-positions"]) ?? defaultConfig.oilDemo.maxOpenPositions,
+    closePositionsOnDailyGuard: !args["no-close-on-daily-guard"],
+    inventoryBlackoutEnabled: !args["no-inventory-blackout"],
+    stateFile: args.stateFile || args["state-file"] || undefined,
+    strategyOptions: {
+      breakoutLookback: optionalNumber(args.breakoutLookback || args["breakout-lookback"]) ?? defaultConfig.oilDemo.breakoutLookback,
+      minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) ?? defaultConfig.oilDemo.minAtrPct,
+      maxAtrPct: optionalNumber(args.maxAtrPct || args["max-atr-pct"]) ?? defaultConfig.oilDemo.maxAtrPct,
+      maxSpreadPct: optionalNumber(args.maxSpreadPct || args["max-spread-pct"]) ?? defaultConfig.oilDemo.maxSpreadPct,
+      minVolumeExpansion: optionalNumber(args.minVolumeExpansion || args["min-volume-expansion"]) ?? defaultConfig.oilDemo.minVolumeExpansion,
+      stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) ?? defaultConfig.oilDemo.stopAtrMultiple,
+      targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? defaultConfig.oilDemo.targetRR
     }
   };
 }
@@ -1031,6 +1128,7 @@ Usage:
   node src/cli.js scheduler run-once --confirm-paper
   node src/cli.js oanda candles --instrument XAU_USD --db
   node src/cli.js gold paper-cycle --sample
+  node src/cli.js oil capital-demo-loop
   node src/cli.js finnhub news --symbol TSLA
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
@@ -1051,6 +1149,7 @@ Commands:
   alpaca     Check Alpaca paper account, market data, and guarded paper orders
   crypto     Pull public crypto/meme coin bars through the normalized data layer
   gold       Run Gold/USD paper-cycle research with sample or OANDA data
+  oil        Run Crude Oil/WTI Capital.com demo strategy loop
   oanda      Pull OANDA practice candles for XAU/USD and forex pairs
   finnhub    Pull stock news and catalysts through Finnhub
   export     Export database tracking files that open in Excel

@@ -459,6 +459,12 @@ function inferSymbolFromEpic(epic) {
   if (normalized.includes("GOLD") || normalized.includes("XAU")) {
     return "XAU/USD";
   }
+  if (normalized.includes("OIL_CRUDE") || normalized.includes("CRUDE")) {
+    return "WTI/USD";
+  }
+  if (normalized.includes("OIL_BRENT") || normalized.includes("BRENT")) {
+    return "BRENT/USD";
+  }
   return normalized.replace(/[_-]/g, "/");
 }
 
@@ -466,6 +472,9 @@ function inferAssetClass(symbol, epic) {
   const value = `${symbol} ${epic}`.toUpperCase();
   if (value.includes("XAU") || value.includes("GOLD")) {
     return "gold";
+  }
+  if (value.includes("OIL") || value.includes("WTI") || value.includes("BRENT") || value.includes("CRUDE")) {
+    return "oil";
   }
   return "forex";
 }

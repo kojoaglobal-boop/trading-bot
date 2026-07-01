@@ -4,7 +4,7 @@ export const sourceCatalog = [
     label: "Built-in Sample Generator",
     kind: "market-data",
     mode: "simulation",
-    covers: ["meme", "stock", "gold", "future", "forex"],
+    covers: ["meme", "stock", "gold", "oil", "future", "forex"],
     requiredEnv: [],
     cost: "free",
     purpose: "Deterministic fake bars for testing the bot loop."
@@ -14,7 +14,7 @@ export const sourceCatalog = [
     label: "Local CSV Import",
     kind: "market-data",
     mode: "historical",
-    covers: ["meme", "stock", "gold", "future", "forex"],
+    covers: ["meme", "stock", "gold", "oil", "future", "forex"],
     requiredEnv: [],
     cost: "free if you already have the data",
     purpose: "Backtesting with exported broker or vendor data."
@@ -65,11 +65,11 @@ export const sourceCatalog = [
     label: "Capital.com",
     kind: "broker-and-data",
     mode: "demo-or-live",
-    covers: ["gold", "forex"],
+    covers: ["gold", "oil", "forex"],
     requiredEnv: ["CAPITAL_IDENTIFIER", "CAPITAL_API_KEY", "CAPITAL_PASSWORD"],
     optionalEnv: ["CAPITAL_ENV", "CAPITAL_BASE_URL"],
     cost: "demo available; spreads and overnight financing apply live",
-    purpose: "Gold/XAU/USD and forex CFD data through the Capital.com public API."
+    purpose: "Gold/XAU/USD, Crude Oil, and forex CFD data through the Capital.com public API."
   },
   {
     id: "oanda",
