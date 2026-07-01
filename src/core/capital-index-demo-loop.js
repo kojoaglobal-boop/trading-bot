@@ -51,6 +51,9 @@ export async function runCapitalIndexDemoLoop({
 } = {}) {
   const marketConfig = getIndexMarketConfig(market);
   const resolvedLabel = label || marketConfig.label;
+  const resolvedStateFile = stateFile === undefined
+    ? `logs/capital-index-${marketConfig.key}-demo-state.json`
+    : stateFile;
   const result = await runCapitalOilDemoLoop({
     client,
     bars,
@@ -91,7 +94,7 @@ export async function runCapitalIndexDemoLoop({
     minMinutesBetweenEntries,
     maxEntriesPerHour,
     maxDailyEntries,
-    stateFile: stateFile || `logs/capital-index-${marketConfig.key}-demo-state.json`,
+    stateFile: resolvedStateFile,
     state,
     writeState
   });

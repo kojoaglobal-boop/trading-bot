@@ -203,7 +203,7 @@ test("runCapitalGoldDemoLoop holds when Capital already has an open Gold demo po
           position: {
             dealId: "deal-1",
             direction: "BUY",
-            size: 0.3,
+            size: 1,
             level: 4030
           }
         }]

@@ -225,8 +225,8 @@ export const defaultConfig = {
     dailyProfitTargetDollars: 250,
     dailyMaxLossDollars: 100,
     maxOpenPositions: 3,
-    defaultSize: 0.3,
-    minPositionSize: 0.3,
+    defaultSize: 1,
+    minPositionSize: 1,
     intervalSeconds: 60,
     closePositionsOnDailyGuard: true,
     timeframes: ["MINUTE", "MINUTE_5", "MINUTE_15", "MINUTE_30"],
@@ -287,7 +287,7 @@ export const defaultConfig = {
     accountStartingCash: 1000,
     dailyProfitTargetDollars: 100,
     dailyMaxLossDollars: 50,
-    maxOpenPositions: 2,
+    maxOpenPositions: 1,
     defaultSize: 0.1,
     minPositionSize: 0.1,
     intervalSeconds: 180,
@@ -317,24 +317,24 @@ export const defaultConfig = {
         label: "US2000",
         epic: "RTY",
         symbol: "US2000",
-        defaultSize: 0.1,
-        minPositionSize: 0.1
+        defaultSize: 1,
+        minPositionSize: 1
       },
       ger40: {
         key: "ger40",
         label: "GER40/DAX",
         epic: "DE40",
         symbol: "GER40",
-        defaultSize: 0.1,
-        minPositionSize: 0.1
+        defaultSize: 0.3,
+        minPositionSize: 0.3
       },
       nas100: {
         key: "nas100",
         label: "NAS100",
         epic: "US100",
         symbol: "NAS100",
-        defaultSize: 0.1,
-        minPositionSize: 0.1
+        defaultSize: 0.2,
+        minPositionSize: 0.2
       },
       us30: {
         key: "us30",

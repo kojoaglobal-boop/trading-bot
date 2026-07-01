@@ -61,7 +61,7 @@ test("runCapitalIndexDemoLoop plans an index order independently", async () => {
   assert.equal(loop.openIndexPositions.length, 0);
   assert.equal(loop.entryDecisions.length, 1);
   assert.equal(loop.entryDecisions[0].order.epic, "RTY");
-  assert.equal(loop.entryDecisions[0].order.size, 0.1);
+  assert.equal(loop.entryDecisions[0].order.size, 1);
   assert.match(formatCapitalIndexDemoLoop(loop), /Capital\.com US2000 Index Demo Loop/);
 });
 
