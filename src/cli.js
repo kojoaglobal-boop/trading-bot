@@ -21,6 +21,7 @@ import { formatStockPaperCycle, runStockPaperCycle } from "./core/stock-paper-sc
 import { getPaperTrainingProfile } from "./core/paper-training-profile.js";
 import { fetchCapitalPrices, formatCapitalMarketData } from "./core/capital-market-data.js";
 import { formatCapitalGoldDemoLoop, runCapitalGoldDemoLoop } from "./core/capital-gold-demo-loop.js";
+import { formatCapitalIndexDemoLoop, runCapitalIndexDemoLoop } from "./core/capital-index-demo-loop.js";
 import { formatCapitalOilDemoLoop, runCapitalOilDemoLoop } from "./core/capital-oil-demo-loop.js";
 import { fetchCryptoBars, formatCryptoBars } from "./core/crypto-market-data.js";
 import { formatGoldPaperCycle, runGoldPaperCycle } from "./core/gold-paper-cycle.js";
@@ -153,6 +154,8 @@ try {
     await runGoldCommand(args);
   } else if (command === "oil") {
     await runOilCommand(args);
+  } else if (command === "index") {
+    await runIndexCommand(args);
   } else if (command === "capital") {
     await runCapitalCommand(args);
   } else if (command === "oanda") {
@@ -671,6 +674,104 @@ function createOilCapitalDemoLoopOptions(args) {
   };
 }
 
+async function runIndexCommand(args) {
+  const subcommand = args._[1] || "help";
+
+  if (subcommand === "capital-demo-loop") {
+    const intervalSeconds = Number(args.intervalSeconds || args["interval-seconds"] || defaultConfig.indexDemo.intervalSeconds);
+    const jitterSeconds = Number(args.jitterSeconds || args["jitter-seconds"] || defaultConfig.indexDemo.loopJitterSeconds || 0);
+    const cycles = Number(args.cycles || 0);
+    const runOnce = async () => {
+      const loop = await runCapitalIndexDemoLoop(createIndexCapitalDemoLoopOptions(args));
+      console.log(formatCapitalIndexDemoLoop(loop));
+
+      if (!args["confirm-capital-demo"]) {
+        console.log("\nDecision-only mode. Add --confirm-capital-demo to allow Capital.com demo orders from approved Index setups.");
+      }
+      return loop;
+    };
+
+    if (!args.loop) {
+      await runOnce();
+      return;
+    }
+
+    let completed = 0;
+    while (!cycles || completed < cycles) {
+      completed += 1;
+      let lastError = null;
+      try {
+        await runOnce();
+      } catch (error) {
+        lastError = error;
+        console.error(`\nIndex Capital demo loop error: ${error.message}`);
+      }
+
+      if (cycles && completed >= cycles) {
+        break;
+      }
+
+      const cooldownSeconds = lastError && /429|too-many/i.test(lastError.message)
+        ? Math.max(intervalSeconds, 300)
+        : intervalSeconds;
+      const waitMs = (Math.max(10, cooldownSeconds) + randomJitterSeconds(jitterSeconds)) * 1000;
+      const nextRunAt = new Date(Date.now() + waitMs).toISOString();
+      console.log(`\nNext Index Capital demo loop: ${nextRunAt}`);
+      await sleep(waitMs);
+    }
+    return;
+  }
+
+  console.log(`Index Commands
+==============
+  node src/cli.js index capital-demo-loop --market us2000
+  node src/cli.js index capital-demo-loop --market ger40
+  node src/cli.js index capital-demo-loop --market nas100
+  node src/cli.js index capital-demo-loop --market us30
+  node src/cli.js index capital-demo-loop --market us2000 --loop --confirm-capital-demo
+`);
+}
+
+function createIndexCapitalDemoLoopOptions(args) {
+  const configuredTimeframes = args.timeframes
+    || args.resolutions
+    || args.resolution
+    || args.granularity
+    || defaultConfig.indexDemo.timeframes.join(",");
+  const resolutions = parseList(configuredTimeframes);
+
+  return {
+    client: new CapitalClient(),
+    market: String(args.market || args.index || "us2000"),
+    epic: args.epic ? String(args.epic).trim().toUpperCase() : undefined,
+    symbol: args.symbol ? String(args.symbol).trim().toUpperCase() : undefined,
+    resolution: resolutions[0] || String(args.resolution || args.granularity || "MINUTE_5"),
+    resolutions,
+    count: Number(args.count || args.limit || 300),
+    size: optionalNumber(args.size),
+    minPositionSize: optionalNumber(args.minPositionSize || args["min-position-size"]),
+    submitOrders: Boolean(args["confirm-capital-demo"]),
+    accountStartingCash: optionalNumber(args.accountStartingCash || args["account-starting-cash"]) ?? defaultConfig.indexDemo.accountStartingCash,
+    dailyProfitTargetDollars: optionalNumber(args.dailyProfitTargetDollars || args["daily-profit-target"]) ?? defaultConfig.indexDemo.dailyProfitTargetDollars,
+    dailyMaxLossDollars: optionalNumber(args.dailyMaxLossDollars || args["daily-max-loss"]) ?? defaultConfig.indexDemo.dailyMaxLossDollars,
+    maxOpenPositions: optionalNumber(args.maxOpenPositions || args["max-open-positions"]) ?? defaultConfig.indexDemo.maxOpenPositions,
+    closePositionsOnDailyGuard: !args["no-close-on-daily-guard"],
+    minMinutesBetweenEntries: optionalNumber(args.minMinutesBetweenEntries || args["min-minutes-between-entries"]) ?? defaultConfig.indexDemo.minMinutesBetweenEntries,
+    maxEntriesPerHour: optionalNumber(args.maxEntriesPerHour || args["max-entries-per-hour"]) ?? defaultConfig.indexDemo.maxEntriesPerHour,
+    maxDailyEntries: optionalNumber(args.maxDailyEntries || args["max-daily-entries"]) ?? defaultConfig.indexDemo.maxDailyEntries,
+    stateFile: args.stateFile || args["state-file"] || undefined,
+    strategyOptions: {
+      breakoutLookback: optionalNumber(args.breakoutLookback || args["breakout-lookback"]) ?? defaultConfig.indexDemo.breakoutLookback,
+      minAtrPct: optionalNumber(args.minAtrPct || args["min-atr-pct"]) ?? defaultConfig.indexDemo.minAtrPct,
+      maxAtrPct: optionalNumber(args.maxAtrPct || args["max-atr-pct"]) ?? defaultConfig.indexDemo.maxAtrPct,
+      maxSpreadPct: optionalNumber(args.maxSpreadPct || args["max-spread-pct"]) ?? defaultConfig.indexDemo.maxSpreadPct,
+      minVolumeExpansion: optionalNumber(args.minVolumeExpansion || args["min-volume-expansion"]) ?? defaultConfig.indexDemo.minVolumeExpansion,
+      stopAtrMultiple: optionalNumber(args.stopAtrMultiple || args["stop-atr-multiple"]) ?? defaultConfig.indexDemo.stopAtrMultiple,
+      targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? defaultConfig.indexDemo.targetRR
+    }
+  };
+}
+
 async function runCapitalCommand(args) {
   const subcommand = args._[1] || "help";
   const client = new CapitalClient();
@@ -1155,6 +1256,7 @@ Usage:
   node src/cli.js oanda candles --instrument XAU_USD --db
   node src/cli.js gold paper-cycle --sample
   node src/cli.js oil capital-demo-loop
+  node src/cli.js index capital-demo-loop --market us2000
   node src/cli.js finnhub news --symbol TSLA
   node src/cli.js news plan
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
@@ -1177,6 +1279,7 @@ Commands:
   crypto     Pull public crypto/meme coin bars through the normalized data layer
   gold       Run Gold/USD paper-cycle research with sample or OANDA data
   oil        Run Crude Oil/WTI Capital.com demo strategy loop
+  index      Run US2000, GER40/DAX, NAS100, and US30 Capital.com demo loops
   oanda      Pull OANDA practice candles for XAU/USD and forex pairs
   finnhub    Pull stock news and catalysts through Finnhub
   news       Show the per-section news/catalyst source plan

@@ -465,6 +465,15 @@ function inferSymbolFromEpic(epic) {
   if (normalized.includes("OIL_BRENT") || normalized.includes("BRENT")) {
     return "BRENT/USD";
   }
+  if (normalized === "RTY") {
+    return "US2000";
+  }
+  if (normalized === "DE40") {
+    return "GER40";
+  }
+  if (normalized === "US100") {
+    return "NAS100";
+  }
   return normalized.replace(/[_-]/g, "/");
 }
 
@@ -475,6 +484,9 @@ function inferAssetClass(symbol, epic) {
   }
   if (value.includes("OIL") || value.includes("WTI") || value.includes("BRENT") || value.includes("CRUDE")) {
     return "oil";
+  }
+  if (value.includes("US2000") || value.includes("RTY") || value.includes("GER40") || value.includes("DE40") || value.includes("NAS100") || value.includes("US100") || value.includes("US30")) {
+    return "future";
   }
   return "forex";
 }

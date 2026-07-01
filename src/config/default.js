@@ -283,6 +283,69 @@ export const defaultConfig = {
     maxDailyEntries: 16,
     loopJitterSeconds: 35
   },
+  indexDemo: {
+    accountStartingCash: 1000,
+    dailyProfitTargetDollars: 100,
+    dailyMaxLossDollars: 50,
+    maxOpenPositions: 2,
+    defaultSize: 0.1,
+    minPositionSize: 0.1,
+    intervalSeconds: 180,
+    closePositionsOnDailyGuard: true,
+    timeframes: ["MINUTE", "MINUTE_5", "MINUTE_15", "MINUTE_30"],
+    baseMinuteBars: 1000,
+    breakoutLookback: 18,
+    minAtrPct: 0.00012,
+    maxAtrPct: 0.018,
+    maxSpreadPct: 0.0015,
+    minVolumeExpansion: 0,
+    stopAtrMultiple: 1.7,
+    targetRR: 2,
+    manageProfitTargets: true,
+    minProfitToExtendDollars: 0.5,
+    profitTargetExtensionAtrMultiple: 1.2,
+    minProfitTargetMoveDistance: 1,
+    moveStopOnTargetExtension: true,
+    breakevenBufferDistance: 1,
+    minMinutesBetweenEntries: 8,
+    maxEntriesPerHour: 2,
+    maxDailyEntries: 10,
+    loopJitterSeconds: 45,
+    markets: {
+      us2000: {
+        key: "us2000",
+        label: "US2000",
+        epic: "RTY",
+        symbol: "US2000",
+        defaultSize: 0.1,
+        minPositionSize: 0.1
+      },
+      ger40: {
+        key: "ger40",
+        label: "GER40/DAX",
+        epic: "DE40",
+        symbol: "GER40",
+        defaultSize: 0.1,
+        minPositionSize: 0.1
+      },
+      nas100: {
+        key: "nas100",
+        label: "NAS100",
+        epic: "US100",
+        symbol: "NAS100",
+        defaultSize: 0.1,
+        minPositionSize: 0.1
+      },
+      us30: {
+        key: "us30",
+        label: "US30",
+        epic: "US30",
+        symbol: "US30",
+        defaultSize: 0.1,
+        minPositionSize: 0.1
+      }
+    }
+  },
   news: {
     stock: {
       required: ["finnhub-company-news"],

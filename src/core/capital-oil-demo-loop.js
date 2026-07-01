@@ -14,6 +14,7 @@ export async function runCapitalOilDemoLoop({
   barsByResolution,
   epic = defaultConfig.oilDemo.epic,
   symbol = defaultConfig.oilDemo.symbol,
+  label = "Oil",
   resolution = "MINUTE_5",
   resolutions = defaultConfig.oilDemo.timeframes,
   count = 300,
@@ -116,12 +117,14 @@ export async function runCapitalOilDemoLoop({
   for (const timeframe of timeframeBars) {
     const signal = buildOilMomentumSignal({
       bars: timeframe.bars,
+      label,
       ...strategyOptions
     });
     const decision = buildCapitalOilDemoDecision({
       bars: timeframe.bars,
       signal,
       epic,
+      label,
       openOilPositions: plannedOpenPositions,
       size,
       minPositionSize,
@@ -226,6 +229,7 @@ export async function runCapitalOilDemoLoop({
     mode: submitOrders ? "capital-oil-demo-order-enabled" : "decision-only",
     epic,
     symbol,
+    label,
     resolution: primaryTimeframe.resolution,
     resolutions: timeframeBars.map((timeframe) => timeframe.resolution),
     bars: primaryTimeframe.bars,
@@ -252,6 +256,7 @@ export function buildCapitalOilDemoDecision({
   bars,
   signal,
   epic = defaultConfig.oilDemo.epic,
+  label = "Oil",
   openOilPositions = [],
   size = defaultConfig.oilDemo.defaultSize,
   minPositionSize = defaultConfig.oilDemo.minPositionSize,
@@ -265,7 +270,7 @@ export function buildCapitalOilDemoDecision({
 } = {}) {
   const latestBar = bars.at(-1);
   if (!latestBar) {
-    return holdDecision("No Capital.com Oil bars were available.");
+    return holdDecision(`No Capital.com ${label} bars were available.`);
   }
 
   if (dailyGuard.closeOpenPositions && openOilPositions.length) {
@@ -291,7 +296,7 @@ export function buildCapitalOilDemoDecision({
   if (undersizedOpenPositions.length) {
     return {
       action: "CLOSE_UNDERSIZED",
-      reason: `${undersizedOpenPositions.length} open ${epic} demo position(s) are below minimum size ${minimumSize}. Closing them before new oil entries.`,
+      reason: `${undersizedOpenPositions.length} open ${epic} demo position(s) are below minimum size ${minimumSize}. Closing them before new ${label} entries.`,
       closePositions: undersizedOpenPositions
     };
   }
@@ -306,18 +311,18 @@ export function buildCapitalOilDemoDecision({
 
   const orderSize = Number(size);
   if (!Number.isFinite(orderSize) || orderSize <= 0) {
-    return holdDecision("No valid Capital.com oil demo size was configured.");
+    return holdDecision(`No valid Capital.com ${label} demo size was configured.`);
   }
 
   if (!signal || signal.action !== "OPEN") {
-    return holdDecision(signal?.reason || "No tradable Oil setup.");
+    return holdDecision(signal?.reason || `No tradable ${label} setup.`);
   }
 
   const rawDedupeKey = signal.dedupeKey || `${signal.setupType}:${signal.latestBarTime}:${signal.direction}`;
   const dedupeKey = scopedDedupeKey(dedupeScope, rawDedupeKey);
   const submittedEntryBarTimes = dailyState.submittedEntryBarTimes || [];
   if (submittedEntryBarTimes.includes(dedupeKey) || submittedEntryBarTimes.includes(rawDedupeKey)) {
-    return holdDecision("Oil setup already submitted for this candle.");
+    return holdDecision(`${label} setup already submitted for this candle.`);
   }
 
   const stopDistance = calculateStopDistance({
@@ -352,29 +357,30 @@ export function buildOilMomentumSignal({
   minAtrPct = defaultConfig.oilDemo.minAtrPct,
   maxAtrPct = defaultConfig.oilDemo.maxAtrPct,
   maxSpreadPct = defaultConfig.oilDemo.maxSpreadPct,
-  minVolumeExpansion = defaultConfig.oilDemo.minVolumeExpansion
+  minVolumeExpansion = defaultConfig.oilDemo.minVolumeExpansion,
+  label = "Oil"
 } = {}) {
   const minBars = Math.max(60, Number(breakoutLookback || 0) + 5);
   const latestBar = bars?.at(-1);
   const previous = bars?.at(-2);
   if (!bars || bars.length < minBars || !latestBar || !previous) {
-    return holdDecision("Oil strategy is warming up.");
+    return holdDecision(`${label} strategy is warming up.`);
   }
 
   const atr = averageTrueRange(bars.slice(-20));
   const atrPct = latestBar.close > 0 ? atr / latestBar.close : 0;
   if (atrPct < minAtrPct) {
-    return holdDecision(`Oil ATR ${atrPct.toFixed(5)} is too quiet for breakout scalping.`);
+    return holdDecision(`${label} ATR ${atrPct.toFixed(5)} is too quiet for breakout scalping.`);
   }
   if (atrPct > maxAtrPct) {
-    return holdDecision(`Oil ATR ${atrPct.toFixed(5)} is too wild for controlled entries.`);
+    return holdDecision(`${label} ATR ${atrPct.toFixed(5)} is too wild for controlled entries.`);
   }
 
   const spreadPct = latestBar.bid && latestBar.ask && latestBar.close
     ? Math.abs(latestBar.ask - latestBar.bid) / latestBar.close
     : 0;
   if (spreadPct > maxSpreadPct) {
-    return holdDecision(`Oil spread ${spreadPct.toFixed(5)} is too wide.`);
+    return holdDecision(`${label} spread ${spreadPct.toFixed(5)} is too wide.`);
   }
 
   const previousBars = bars.slice(0, -1);
@@ -386,7 +392,7 @@ export function buildOilMomentumSignal({
     ? Number(latestBar.volume || 0) / volumeAverage
     : 1;
   if (volumeExpansion < minVolumeExpansion) {
-    return holdDecision(`Oil volume expansion ${volumeExpansion.toFixed(2)}x is too weak.`);
+    return holdDecision(`${label} volume expansion ${volumeExpansion.toFixed(2)}x is too weak.`);
   }
 
   const trend = trendConfidence(bars);
@@ -401,12 +407,12 @@ export function buildOilMomentumSignal({
       : null;
 
   if (!direction) {
-    return holdDecision("No Oil breakout/retest setup with aligned EMA trend.");
+    return holdDecision(`No ${label} breakout/retest setup with aligned EMA trend.`);
   }
 
   const setupType = bullishBreakout || bearishBreakout
-    ? "oil-breakout"
-    : "oil-retest";
+    ? `${slugLabel(label)}-breakout`
+    : `${slugLabel(label)}-retest`;
   const confidence = clamp(
     0.55
       + Math.min(0.2, Math.abs(trend.fast / trend.slow - 1) * 12)
@@ -423,7 +429,7 @@ export function buildOilMomentumSignal({
     latestBarTime: latestBar.time,
     dedupeKey: `${setupType}:${latestBar.time}:${direction}`,
     confidence,
-    reason: `${setupType} ${direction.toLowerCase()} on Crude Oil: ATR ${atrPct.toFixed(5)}, volume ${volumeExpansion.toFixed(2)}x, spread ${spreadPct.toFixed(5)}`
+    reason: `${setupType} ${direction.toLowerCase()} on ${label}: ATR ${atrPct.toFixed(5)}, volume ${volumeExpansion.toFixed(2)}x, spread ${spreadPct.toFixed(5)}`
   };
 }
 
@@ -759,6 +765,13 @@ function normalizeResolutions(resolutions, fallbackResolution) {
 
 function normalizeResolution(value) {
   return String(value || "MINUTE_5").trim().toUpperCase();
+}
+
+function slugLabel(value) {
+  return String(value || "index")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "index";
 }
 
 function extractOpenPositions(payload, epic) {
