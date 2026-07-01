@@ -4,6 +4,7 @@ import { defaultConfig } from "../config/default.js";
 import { CapitalClient, formatCapitalDealResult } from "../integrations/capital-client.js";
 import { fetchCapitalPrices } from "./capital-market-data.js";
 import { aggregateBars } from "../strategies/gold-trendline.js";
+import { appendSubmittedEntry, buildTradeFrequencyGuard } from "./trade-frequency-guard.js";
 
 const DEFAULT_STATE_FILE = "logs/capital-oil-demo-state.json";
 
@@ -33,6 +34,9 @@ export async function runCapitalOilDemoLoop({
   moveStopOnTargetExtension = defaultConfig.oilDemo.moveStopOnTargetExtension,
   breakevenBufferDistance = defaultConfig.oilDemo.breakevenBufferDistance,
   inventoryBlackoutEnabled = defaultConfig.oilDemo.inventoryBlackoutEnabled,
+  minMinutesBetweenEntries = defaultConfig.oilDemo.minMinutesBetweenEntries,
+  maxEntriesPerHour = defaultConfig.oilDemo.maxEntriesPerHour,
+  maxDailyEntries = defaultConfig.oilDemo.maxDailyEntries,
   stateFile = DEFAULT_STATE_FILE,
   state,
   writeState = stateFile !== false
@@ -86,6 +90,13 @@ export async function runCapitalOilDemoLoop({
     now,
     enabled: inventoryBlackoutEnabled
   });
+  const frequencyGuard = buildTradeFrequencyGuard({
+    state: dailyState,
+    now,
+    minMinutesBetweenEntries,
+    maxEntriesPerHour,
+    maxDailyEntries
+  });
 
   const profitTargetAdjustments = manageProfitTargets
     ? buildOilProfitTargetAdjustments({
@@ -117,6 +128,7 @@ export async function runCapitalOilDemoLoop({
       maxOpenPositions,
       dailyGuard,
       inventoryGuard,
+      frequencyGuard,
       dailyState,
       dedupeScope: timeframe.resolution,
       strategyOptions
@@ -192,6 +204,15 @@ export async function runCapitalOilDemoLoop({
           entryDecision.dedupeKey || entryDecision.latestBarTime
         ]).slice(-200);
         dailyState.lastSubmittedEntryBarTime = entryDecision.latestBarTime;
+        Object.assign(dailyState, appendSubmittedEntry(dailyState, {
+          submittedAt: now.toISOString(),
+          barTime: entryDecision.latestBarTime,
+          dedupeKey: entryDecision.dedupeKey,
+          epic,
+          direction: entryDecision.order.direction,
+          resolution: entryDecision.resolution,
+          setupType: entryDecision.setupType
+        }));
       }
     }
   }
@@ -211,6 +232,7 @@ export async function runCapitalOilDemoLoop({
     account,
     dailyGuard,
     inventoryGuard,
+    frequencyGuard,
     dailyState,
     maxOpenPositions,
     openOilPositions,
@@ -236,6 +258,7 @@ export function buildCapitalOilDemoDecision({
   maxOpenPositions = defaultConfig.oilDemo.maxOpenPositions,
   dailyGuard = activeGuard(),
   inventoryGuard = inactiveInventoryGuard(),
+  frequencyGuard = activeFrequencyGuard(),
   dailyState = {},
   dedupeScope = "",
   strategyOptions = {}
@@ -275,6 +298,10 @@ export function buildCapitalOilDemoDecision({
 
   if (openOilPositions.length >= maxOpenPositions) {
     return holdDecision(`Capital.com already has ${openOilPositions.length}/${maxOpenPositions} open ${epic} demo position(s).`);
+  }
+
+  if (frequencyGuard.blocksEntries) {
+    return holdDecision(`${frequencyGuard.status}: ${frequencyGuard.reason}`);
   }
 
   const orderSize = Number(size);
@@ -533,6 +560,7 @@ export function formatCapitalOilDemoLoop(result) {
   lines.push(`Day start:     ${money(result.dailyState.dayStartEquity)}`);
   lines.push(`Daily P/L:     ${money(result.dailyGuard.dailyPnl)} / target ${money(result.dailyGuard.dailyProfitTargetDollars)} / max loss ${money(-result.dailyGuard.dailyMaxLossDollars)}`);
   lines.push(`Daily guard:   ${result.dailyGuard.status}`);
+  lines.push(`Entry guard:   ${result.frequencyGuard.status} (${result.frequencyGuard.entriesLastHour || 0}/hr, ${result.frequencyGuard.entriesToday || 0}/day)`);
   lines.push(`Inventory:     ${result.inventoryGuard.status} ${result.inventoryGuard.localTime ? `(${result.inventoryGuard.localWeekday} ${result.inventoryGuard.localTime} ${result.inventoryGuard.timeZone})` : ""}`.trimEnd());
   lines.push(`Open demo pos: ${result.openOilPositions.length}/${result.maxOpenPositions}`);
   lines.push(`Decision:      ${decisionAction}`);
@@ -800,7 +828,8 @@ async function loadDailyState({
     return {
       date: today,
       dayStartEquity: firstFinite(currentEquity, fallbackEquity),
-      submittedEntryBarTimes: []
+      submittedEntryBarTimes: [],
+      submittedEntries: []
     };
   }
 
@@ -809,6 +838,9 @@ async function loadDailyState({
     dayStartEquity: firstFinite(loaded.dayStartEquity, currentEquity, fallbackEquity),
     submittedEntryBarTimes: Array.isArray(loaded.submittedEntryBarTimes)
       ? loaded.submittedEntryBarTimes
+      : [],
+    submittedEntries: Array.isArray(loaded.submittedEntries)
+      ? loaded.submittedEntries
       : []
   };
 }
@@ -885,6 +917,17 @@ function inactiveInventoryGuard() {
     status: "ACTIVE",
     blocksEntries: false,
     reason: "Oil inventory-report blackout is inactive."
+  };
+}
+
+function activeFrequencyGuard() {
+  return {
+    status: "ACTIVE",
+    blocksEntries: false,
+    reason: "Trade frequency guard is inside limits.",
+    entriesToday: 0,
+    entriesLastHour: 0,
+    minutesSinceLastEntry: null
   };
 }
 

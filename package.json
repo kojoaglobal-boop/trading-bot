@@ -11,6 +11,7 @@
     "optimize": "node src/cli.js optimize --sample",
     "walk-forward": "node src/cli.js walk-forward --sample",
     "sources": "node src/cli.js sources",
+    "news:plan": "node src/cli.js news plan",
     "journal": "node src/cli.js journal",
     "journal:db": "node src/cli.js journal --db",
     "dashboard": "node src/cli.js dashboard",

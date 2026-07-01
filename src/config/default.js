@@ -240,15 +240,18 @@ export const defaultConfig = {
     profitTargetExtensionAtrMultiple: 1.5,
     minProfitTargetMoveDistance: 1,
     moveStopOnTargetExtension: true,
-    breakevenBufferDistance: 0.5
+    breakevenBufferDistance: 0.5,
+    minMinutesBetweenEntries: 5,
+    maxEntriesPerHour: 4,
+    maxDailyEntries: 20
   },
   oilDemo: {
     accountStartingCash: 1000,
     dailyProfitTargetDollars: 100,
     dailyMaxLossDollars: 50,
     maxOpenPositions: 2,
-    defaultSize: 1,
-    minPositionSize: 1,
+    defaultSize: 10,
+    minPositionSize: 10,
     intervalSeconds: 120,
     closePositionsOnDailyGuard: true,
     epic: "OIL_CRUDE",
@@ -273,7 +276,32 @@ export const defaultConfig = {
     inventoryBlackoutTimeZone: "America/New_York",
     inventoryBlackoutWeekday: "Wed",
     inventoryBlackoutStartMinute: 10 * 60 + 20,
-    inventoryBlackoutEndMinute: 10 * 60 + 55
+    inventoryBlackoutEndMinute: 10 * 60 + 55,
+    minMinutesBetweenEntries: 6,
+    maxEntriesPerHour: 3,
+    maxDailyEntries: 16
+  },
+  news: {
+    stock: {
+      required: ["finnhub-company-news"],
+      optional: ["finnhub-market-news"],
+      purpose: "Company headlines, sector catalysts, and broad market risk."
+    },
+    gold: {
+      required: ["finnhub-market-news"],
+      optional: ["fred-macro"],
+      purpose: "Macro risk, USD/rates pressure, geopolitics, and metals sentiment."
+    },
+    oil: {
+      required: ["eia-petroleum", "finnhub-market-news"],
+      optional: ["fred-macro"],
+      purpose: "Inventory shocks, energy headlines, USD/rates pressure, and crude momentum catalysts."
+    },
+    meme: {
+      required: [],
+      optional: ["finnhub-market-news", "coinbase", "kraken"],
+      purpose: "Crypto market sentiment, exchange data, and later social/on-chain signals."
+    }
   },
   risk: {
     allowedAssetClasses: ["meme", "stock", "gold", "oil", "future", "forex"],

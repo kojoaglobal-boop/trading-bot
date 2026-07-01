@@ -35,6 +35,28 @@ export class FinnhubClient {
     return normalizeCompanyNews(payload, { symbol: normalizedSymbol });
   }
 
+  async getMarketNews({
+    category = "general",
+    minId
+  } = {}) {
+    this.assertReady();
+    const normalizedCategory = String(category || "general").trim().toLowerCase();
+    const url = new URL(`${this.baseUrl}/news`);
+    url.searchParams.set("category", normalizedCategory);
+    if (minId !== undefined && minId !== null && minId !== "") {
+      url.searchParams.set("minId", String(minId));
+    }
+    url.searchParams.set("token", this.apiKey);
+
+    const response = await this.fetch(url);
+    if (!response.ok) {
+      throw new Error(`Finnhub market news request failed with HTTP ${response.status}`);
+    }
+
+    const payload = await response.json();
+    return normalizeMarketNews(payload, { category: normalizedCategory });
+  }
+
   assertReady() {
     if (!this.apiKey) {
       throw new Error("Missing FINNHUB_API_KEY. Add it to .env before using Finnhub.");
@@ -65,6 +87,24 @@ export function normalizeCompanyNews(payload, { symbol } = {}) {
   }));
 }
 
+export function normalizeMarketNews(payload, { category } = {}) {
+  if (!Array.isArray(payload)) {
+    return [];
+  }
+
+  return payload.map((item) => ({
+    id: String(item.id ?? ""),
+    category,
+    headline: String(item.headline || ""),
+    summary: String(item.summary || ""),
+    source: String(item.source || ""),
+    url: String(item.url || ""),
+    image: String(item.image || ""),
+    related: String(item.related || ""),
+    datetime: item.datetime ? new Date(Number(item.datetime) * 1000).toISOString() : null
+  }));
+}
+
 export function formatFinnhubCompanyNews(news, {
   symbol,
   limit = 8
@@ -72,6 +112,30 @@ export function formatFinnhubCompanyNews(news, {
   const lines = [];
   lines.push(`Finnhub Company News${symbol ? `: ${symbol}` : ""}`);
   lines.push("====================");
+
+  if (!news.length) {
+    lines.push("No news returned.");
+    return lines.join("\n");
+  }
+
+  for (const item of news.slice(0, limit)) {
+    lines.push(`- ${item.datetime || "unknown time"} ${item.source || "unknown"}`);
+    lines.push(`  ${item.headline || "(no headline)"}`);
+    if (item.summary) {
+      lines.push(`  ${truncate(item.summary, 180)}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function formatFinnhubMarketNews(news, {
+  category,
+  limit = 8
+} = {}) {
+  const lines = [];
+  lines.push(`Finnhub Market News${category ? `: ${category}` : ""}`);
+  lines.push("===================");
 
   if (!news.length) {
     lines.push("No news returned.");

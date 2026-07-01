@@ -35,10 +35,30 @@ export const sourceCatalog = [
     label: "Finnhub",
     kind: "market-data",
     mode: "news-and-catalysts",
-    covers: ["stock"],
+    covers: ["stock", "gold", "oil", "forex", "meme"],
     requiredEnv: ["FINNHUB_API_KEY"],
     cost: "free tier available; paid plans may be useful later",
-    purpose: "Company news and catalyst checks for stock selection before Alpaca paper trading."
+    purpose: "Company news, broad market news, and catalyst checks before paper trading."
+  },
+  {
+    id: "eia",
+    label: "U.S. Energy Information Administration",
+    kind: "market-data",
+    mode: "official-energy-news-and-data",
+    covers: ["oil"],
+    requiredEnv: ["EIA_API_KEY"],
+    cost: "free API key",
+    purpose: "Official crude oil inventories, supply/demand, and energy data for Oil trading filters."
+  },
+  {
+    id: "fred",
+    label: "FRED",
+    kind: "market-data",
+    mode: "official-macro-data",
+    covers: ["stock", "gold", "oil", "forex", "future"],
+    requiredEnv: ["FRED_API_KEY"],
+    cost: "free API key",
+    purpose: "Official macro series for rates, dollar, inflation, and economic backdrop filters."
   },
   {
     id: "coinbase",

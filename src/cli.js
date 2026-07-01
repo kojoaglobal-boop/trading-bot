@@ -28,6 +28,7 @@ import { formatGoldPullbackSweep, runGoldPullbackSweep } from "./core/gold-pullb
 import { formatGoldTrendlineSweep, runGoldTrendlineSweep } from "./core/gold-trendline-sweep.js";
 import { fetchOandaCandles, formatOandaMarketData } from "./core/oanda-market-data.js";
 import { loadMarketBars, upsertMarketBars } from "./core/database-market-data.js";
+import { formatNewsSourcePlan, getNewsSourcePlan } from "./core/news-source-plan.js";
 import {
   formatDataQualityCheck,
   requireStoredDataQualityPass,
@@ -158,6 +159,8 @@ try {
     await runOandaCommand(args);
   } else if (command === "finnhub") {
     await runFinnhubCommand(args);
+  } else if (command === "news") {
+    await runNewsCommand(args);
   } else if (command === "export") {
     await runExportCommand(args);
   } else if (command === "scheduler") {
@@ -555,6 +558,9 @@ function createGoldCapitalDemoLoopOptions(args) {
     maxEntryDriftBps: optionalNumber(args.maxEntryDriftBps || args["max-entry-drift-bps"]) ?? defaultConfig.goldDemo.maxEntryDriftBps,
     allowTrendProbe: !args["no-trend-probe"],
     trendProbeMinBars: optionalNumber(args.trendProbeMinBars || args["trend-probe-min-bars"]) ?? defaultConfig.goldDemo.trendProbeMinBars,
+    minMinutesBetweenEntries: optionalNumber(args.minMinutesBetweenEntries || args["min-minutes-between-entries"]) ?? defaultConfig.goldDemo.minMinutesBetweenEntries,
+    maxEntriesPerHour: optionalNumber(args.maxEntriesPerHour || args["max-entries-per-hour"]) ?? defaultConfig.goldDemo.maxEntriesPerHour,
+    maxDailyEntries: optionalNumber(args.maxDailyEntries || args["max-daily-entries"]) ?? defaultConfig.goldDemo.maxDailyEntries,
     stateFile: args.stateFile || args["state-file"] || undefined,
     strategyOptions: {
       targetRR: optionalNumber(args.targetRR || args["target-rr"]) ?? 2,
@@ -618,8 +624,8 @@ async function runOilCommand(args) {
   node src/cli.js oil capital-demo-loop
   node src/cli.js oil capital-demo-loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30
   node src/cli.js oil capital-demo-loop --loop --interval-seconds 120
-  node src/cli.js oil capital-demo-loop --size 1 --confirm-capital-demo
-  node src/cli.js oil capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 1 --min-position-size 1 --confirm-capital-demo
+  node src/cli.js oil capital-demo-loop --size 10 --confirm-capital-demo
+  node src/cli.js oil capital-demo-loop --loop --timeframes MINUTE,MINUTE_5,MINUTE_15,MINUTE_30 --size 10 --min-position-size 10 --confirm-capital-demo
 `);
 }
 
@@ -647,6 +653,9 @@ function createOilCapitalDemoLoopOptions(args) {
     maxOpenPositions: optionalNumber(args.maxOpenPositions || args["max-open-positions"]) ?? defaultConfig.oilDemo.maxOpenPositions,
     closePositionsOnDailyGuard: !args["no-close-on-daily-guard"],
     inventoryBlackoutEnabled: !args["no-inventory-blackout"],
+    minMinutesBetweenEntries: optionalNumber(args.minMinutesBetweenEntries || args["min-minutes-between-entries"]) ?? defaultConfig.oilDemo.minMinutesBetweenEntries,
+    maxEntriesPerHour: optionalNumber(args.maxEntriesPerHour || args["max-entries-per-hour"]) ?? defaultConfig.oilDemo.maxEntriesPerHour,
+    maxDailyEntries: optionalNumber(args.maxDailyEntries || args["max-daily-entries"]) ?? defaultConfig.oilDemo.maxDailyEntries,
     stateFile: args.stateFile || args["state-file"] || undefined,
     strategyOptions: {
       breakoutLookback: optionalNumber(args.breakoutLookback || args["breakout-lookback"]) ?? defaultConfig.oilDemo.breakoutLookback,
@@ -847,6 +856,21 @@ async function runFinnhubCommand(args) {
 ================
   node src/cli.js finnhub news --symbol TSLA
   node src/cli.js finnhub news --symbol NVDA --days 7 --limit 5
+`);
+}
+
+async function runNewsCommand(args) {
+  const subcommand = args._[1] || "plan";
+
+  if (subcommand === "plan" || subcommand === "sources") {
+    console.log(formatNewsSourcePlan(getNewsSourcePlan()));
+    return;
+  }
+
+  console.log(`News Commands
+=============
+  node src/cli.js news plan
+  node src/cli.js news sources
 `);
 }
 
@@ -1130,6 +1154,7 @@ Usage:
   node src/cli.js gold paper-cycle --sample
   node src/cli.js oil capital-demo-loop
   node src/cli.js finnhub news --symbol TSLA
+  node src/cli.js news plan
   node src/cli.js crypto bars --provider coinbase --product BTC-USD --db
   node src/cli.js crypto quality --symbol BTC/USD --db
   node src/cli.js export paper-ledger
@@ -1152,6 +1177,7 @@ Commands:
   oil        Run Crude Oil/WTI Capital.com demo strategy loop
   oanda      Pull OANDA practice candles for XAU/USD and forex pairs
   finnhub    Pull stock news and catalysts through Finnhub
+  news       Show the per-section news/catalyst source plan
   export     Export database tracking files that open in Excel
   scheduler  Run the stock paper loop, broker sync, and Excel export together
   doctor     Print environment and safety-gate status

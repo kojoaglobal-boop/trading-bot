@@ -5,6 +5,7 @@ import { CapitalClient, formatCapitalDealResult } from "../integrations/capital-
 import { fetchCapitalPrices } from "./capital-market-data.js";
 import { runGoldPaperCycle } from "./gold-paper-cycle.js";
 import { aggregateBars } from "../strategies/gold-trendline.js";
+import { appendSubmittedEntry, buildTradeFrequencyGuard } from "./trade-frequency-guard.js";
 
 const DEFAULT_PULLBACK_OPTIONS = {
   targetRR: 2,
@@ -43,6 +44,9 @@ export async function runCapitalGoldDemoLoop({
   minProfitTargetMoveDistance = defaultConfig.goldDemo.minProfitTargetMoveDistance,
   moveStopOnTargetExtension = defaultConfig.goldDemo.moveStopOnTargetExtension,
   breakevenBufferDistance = defaultConfig.goldDemo.breakevenBufferDistance,
+  minMinutesBetweenEntries = defaultConfig.goldDemo.minMinutesBetweenEntries,
+  maxEntriesPerHour = defaultConfig.goldDemo.maxEntriesPerHour,
+  maxDailyEntries = defaultConfig.goldDemo.maxDailyEntries,
   stateFile = DEFAULT_STATE_FILE,
   state,
   writeState = stateFile !== false
@@ -90,6 +94,13 @@ export async function runCapitalGoldDemoLoop({
     dailyMaxLossDollars,
     closePositionsOnDailyGuard
   });
+  const frequencyGuard = buildTradeFrequencyGuard({
+    state: dailyState,
+    now,
+    minMinutesBetweenEntries,
+    maxEntriesPerHour,
+    maxDailyEntries
+  });
   const mergedStrategyOptions = {
     ...DEFAULT_PULLBACK_OPTIONS,
     ...strategyOptions
@@ -126,6 +137,7 @@ export async function runCapitalGoldDemoLoop({
       size,
       strategyOptions: mergedStrategyOptions,
       dailyGuard,
+      frequencyGuard,
       dailyState,
       maxOpenPositions,
       minPositionSize,
@@ -207,6 +219,15 @@ export async function runCapitalGoldDemoLoop({
           entryDecision.dedupeKey || entryDecision.latestBarTime
         ]).slice(-200);
         dailyState.lastSubmittedEntryBarTime = entryDecision.latestBarTime;
+        Object.assign(dailyState, appendSubmittedEntry(dailyState, {
+          submittedAt: now.toISOString(),
+          barTime: entryDecision.latestBarTime,
+          dedupeKey: entryDecision.dedupeKey,
+          epic,
+          direction: entryDecision.order.direction,
+          resolution: entryDecision.resolution,
+          setupType: entryDecision.setupType
+        }));
       }
     }
   }
@@ -224,6 +245,7 @@ export async function runCapitalGoldDemoLoop({
     bars: primaryTimeframe.bars,
     account,
     dailyGuard,
+    frequencyGuard,
     dailyState,
     maxOpenPositions,
     openGoldPositions,
@@ -248,6 +270,7 @@ export function buildCapitalGoldDemoDecision({
   size = defaultConfig.goldDemo.defaultSize,
   strategyOptions = DEFAULT_PULLBACK_OPTIONS,
   dailyGuard = activeGuard(),
+  frequencyGuard = activeFrequencyGuard(),
   dailyState = {},
   maxOpenPositions = defaultConfig.goldDemo.maxOpenPositions,
   minPositionSize = defaultConfig.goldDemo.minPositionSize,
@@ -288,6 +311,10 @@ export function buildCapitalGoldDemoDecision({
 
   if (openGoldPositions.length >= maxOpenPositions) {
     return holdDecision(`Capital.com already has ${openGoldPositions.length}/${maxOpenPositions} open ${epic} demo position(s).`);
+  }
+
+  if (frequencyGuard.blocksEntries) {
+    return holdDecision(`${frequencyGuard.status}: ${frequencyGuard.reason}`);
   }
 
   const orderSize = Number(size);
@@ -366,6 +393,7 @@ export function formatCapitalGoldDemoLoop(result) {
   lines.push(`Day start:     ${money(result.dailyState.dayStartEquity)}`);
   lines.push(`Daily P/L:     ${money(result.dailyGuard.dailyPnl)} / target ${money(result.dailyGuard.dailyProfitTargetDollars)} / max loss ${money(-result.dailyGuard.dailyMaxLossDollars)}`);
   lines.push(`Daily guard:   ${result.dailyGuard.status}`);
+  lines.push(`Entry guard:   ${result.frequencyGuard.status} (${result.frequencyGuard.entriesLastHour || 0}/hr, ${result.frequencyGuard.entriesToday || 0}/day)`);
   lines.push(`Recovery:      ${result.dailyGuard.recoveryMode ? "ACTIVE after loss, still hunting valid setups" : "idle"}`);
   lines.push(`Open demo pos: ${result.openGoldPositions.length}/${result.maxOpenPositions}`);
   lines.push(`Paper P/L:     ${money(result.cycle.report.account.netPnl)} (${pct(result.cycle.report.account.returnPct)})`);
@@ -749,7 +777,8 @@ async function loadDailyState({
     return {
       date: today,
       dayStartEquity: firstFinite(currentEquity, fallbackEquity),
-      submittedEntryBarTimes: []
+      submittedEntryBarTimes: [],
+      submittedEntries: []
     };
   }
 
@@ -758,6 +787,9 @@ async function loadDailyState({
     dayStartEquity: firstFinite(loaded.dayStartEquity, currentEquity, fallbackEquity),
     submittedEntryBarTimes: Array.isArray(loaded.submittedEntryBarTimes)
       ? loaded.submittedEntryBarTimes
+      : [],
+    submittedEntries: Array.isArray(loaded.submittedEntries)
+      ? loaded.submittedEntries
       : []
   };
 }
@@ -827,6 +859,17 @@ function activeGuard() {
     dailyMaxLossDollars: defaultConfig.goldDemo.dailyMaxLossDollars,
     closePositionsOnDailyGuard: defaultConfig.goldDemo.closePositionsOnDailyGuard
   });
+}
+
+function activeFrequencyGuard() {
+  return {
+    status: "ACTIVE",
+    blocksEntries: false,
+    reason: "Trade frequency guard is inside limits.",
+    entriesToday: 0,
+    entriesLastHour: 0,
+    minutesSinceLastEntry: null
+  };
 }
 
 function findRecentEntryFill({

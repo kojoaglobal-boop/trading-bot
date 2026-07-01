@@ -58,7 +58,25 @@ test("source catalog includes Finnhub as a stock catalyst source", () => {
   assert.equal(finnhub.kind, "market-data");
   assert.equal(finnhub.mode, "news-and-catalysts");
   assert.deepEqual(finnhub.requiredEnv, ["FINNHUB_API_KEY"]);
-  assert.deepEqual(finnhub.covers, ["stock"]);
+  assert.deepEqual(finnhub.covers, ["stock", "gold", "oil", "forex", "meme"]);
+});
+
+test("source catalog includes EIA as an oil catalyst source", () => {
+  const eia = sourceCatalog.find((source) => source.id === "eia");
+
+  assert.equal(eia.kind, "market-data");
+  assert.equal(eia.mode, "official-energy-news-and-data");
+  assert.deepEqual(eia.requiredEnv, ["EIA_API_KEY"]);
+  assert.deepEqual(eia.covers, ["oil"]);
+});
+
+test("source catalog includes FRED as a macro catalyst source", () => {
+  const fred = sourceCatalog.find((source) => source.id === "fred");
+
+  assert.equal(fred.kind, "market-data");
+  assert.equal(fred.mode, "official-macro-data");
+  assert.deepEqual(fred.requiredEnv, ["FRED_API_KEY"]);
+  assert.deepEqual(fred.covers, ["stock", "gold", "oil", "forex", "future"]);
 });
 
 test("source catalog includes Capital.com as a gold, oil, and forex source", () => {

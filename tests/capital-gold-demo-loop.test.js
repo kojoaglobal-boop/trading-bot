@@ -86,6 +86,30 @@ test("buildCapitalGoldDemoDecision opens an aggressive trend-probe when pullback
   assert.equal(decision.order.direction, "BUY");
 });
 
+test("buildCapitalGoldDemoDecision blocks fresh entries when frequency guard is active", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeGoldBar(index));
+  const decision = buildCapitalGoldDemoDecision({
+    bars,
+    epic: "GOLD",
+    openGoldPositions: [],
+    size: 0.3,
+    allowTrendProbe: true,
+    frequencyGuard: {
+      status: "MAX_HOURLY_ENTRIES",
+      blocksEntries: true,
+      reason: "hourly entry cap reached"
+    },
+    cycle: {
+      report: {
+        fills: []
+      }
+    }
+  });
+
+  assert.equal(decision.action, "HOLD");
+  assert.match(decision.reason, /MAX_HOURLY_ENTRIES/);
+});
+
 test("buildProfitTargetAdjustments extends profitable BUY targets and protects the stop", () => {
   const bars = Array.from({ length: 90 }, (_value, index) => makeGoldBar(index));
   const adjustments = buildProfitTargetAdjustments({

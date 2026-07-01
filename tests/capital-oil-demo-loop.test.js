@@ -32,7 +32,7 @@ test("buildCapitalOilDemoDecision converts an oil signal into a demo order", () 
     signal,
     epic: "OIL_CRUDE",
     openOilPositions: [],
-    size: 1,
+    size: 10,
     strategyOptions: {
       stopAtrMultiple: 1.8,
       targetRR: 2.2
@@ -42,8 +42,31 @@ test("buildCapitalOilDemoDecision converts an oil signal into a demo order", () 
   assert.equal(decision.action, "OPEN");
   assert.equal(decision.order.epic, "OIL_CRUDE");
   assert.equal(decision.order.direction, "BUY");
-  assert.equal(decision.order.size, 1);
+  assert.equal(decision.order.size, 10);
   assert.equal(decision.order.profitDistance, Number((decision.order.stopDistance * 2.2).toFixed(2)));
+});
+
+test("buildCapitalOilDemoDecision blocks fresh entries when frequency guard is active", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeOilBar(index));
+  const signal = buildOilMomentumSignal({
+    bars,
+    minVolumeExpansion: 0.1
+  });
+  const decision = buildCapitalOilDemoDecision({
+    bars,
+    signal,
+    epic: "OIL_CRUDE",
+    openOilPositions: [],
+    size: 10,
+    frequencyGuard: {
+      status: "ENTRY_COOLDOWN",
+      blocksEntries: true,
+      reason: "entry cooldown active"
+    }
+  });
+
+  assert.equal(decision.action, "HOLD");
+  assert.match(decision.reason, /ENTRY_COOLDOWN/);
 });
 
 test("runCapitalOilDemoLoop ignores open Gold positions and plans oil independently", async () => {
@@ -118,7 +141,7 @@ test("runCapitalOilDemoLoop closes Oil positions when the daily max loss guard i
           position: {
             dealId: "oil-loss",
             direction: "BUY",
-            size: 1,
+            size: 10,
             level: 70,
             upl: 0
           }
@@ -176,7 +199,7 @@ test("buildOilProfitTargetAdjustments extends target and moves stop only into pr
       epic: "OIL_CRUDE",
       dealId: "oil-buy",
       direction: "BUY",
-      size: 1,
+      size: 10,
       level: 70,
       stopLevel: 69.1,
       profitLevel: 70.9,
