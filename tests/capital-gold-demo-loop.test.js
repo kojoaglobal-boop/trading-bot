@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildProfitTargetAdjustments,
   buildCapitalGoldDemoDecision,
   formatCapitalGoldDemoLoop,
   runCapitalGoldDemoLoop
@@ -83,6 +84,80 @@ test("buildCapitalGoldDemoDecision opens an aggressive trend-probe when pullback
   assert.equal(decision.action, "OPEN");
   assert.equal(decision.setupType, "trend-probe");
   assert.equal(decision.order.direction, "BUY");
+});
+
+test("buildProfitTargetAdjustments extends profitable BUY targets and protects the stop", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeGoldBar(index));
+  const adjustments = buildProfitTargetAdjustments({
+    bars,
+    openGoldPositions: [{
+      epic: "GOLD",
+      dealId: "deal-buy",
+      direction: "BUY",
+      size: 0.3,
+      level: 4050,
+      stopLevel: 4030,
+      profitLevel: 4080,
+      upl: 2.5
+    }],
+    minProfitToExtendDollars: 1,
+    breakevenBufferDistance: 0.5
+  });
+
+  assert.equal(adjustments.length, 1);
+  assert.equal(adjustments[0].dealId, "deal-buy");
+  assert.equal(adjustments[0].direction, "BUY");
+  assert.ok(adjustments[0].profitLevel > 4081);
+  assert.equal(adjustments[0].stopLevel, 4050.5);
+  assert.match(adjustments[0].reason, /protected SL/);
+});
+
+test("buildProfitTargetAdjustments extends profitable SELL targets and protects the stop", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeFallingGoldBar(index));
+  const adjustments = buildProfitTargetAdjustments({
+    bars,
+    openGoldPositions: [{
+      epic: "GOLD",
+      dealId: "deal-sell",
+      direction: "SELL",
+      size: 0.3,
+      level: 4050,
+      stopLevel: 4070,
+      profitLevel: 4020,
+      upl: 3
+    }],
+    minProfitToExtendDollars: 1,
+    breakevenBufferDistance: 0.5
+  });
+
+  assert.equal(adjustments.length, 1);
+  assert.equal(adjustments[0].dealId, "deal-sell");
+  assert.equal(adjustments[0].direction, "SELL");
+  assert.ok(adjustments[0].profitLevel < 4019);
+  assert.equal(adjustments[0].stopLevel, 4049.5);
+});
+
+test("buildProfitTargetAdjustments never worsens an already protected stop", () => {
+  const bars = Array.from({ length: 90 }, (_value, index) => makeGoldBar(index));
+  const adjustments = buildProfitTargetAdjustments({
+    bars,
+    openGoldPositions: [{
+      epic: "GOLD",
+      dealId: "deal-protected-buy",
+      direction: "BUY",
+      size: 0.3,
+      level: 4050,
+      stopLevel: 4055,
+      profitLevel: 4080,
+      upl: 5
+    }],
+    minProfitToExtendDollars: 1,
+    breakevenBufferDistance: 0.5
+  });
+
+  assert.equal(adjustments.length, 1);
+  assert.equal(adjustments[0].stopLevel, null);
+  assert.ok(adjustments[0].profitLevel > 4081);
 });
 
 test("runCapitalGoldDemoLoop holds when Capital already has an open Gold demo position", async () => {
@@ -301,6 +376,23 @@ function makeGoldBar(index) {
     assetClass: "gold",
     venue: "capital-demo",
     open: close - 0.5,
+    high: close + 2,
+    low: close - 2,
+    close,
+    volume: 100,
+    bid: close - 0.2,
+    ask: close + 0.2
+  };
+}
+
+function makeFallingGoldBar(index) {
+  const close = 4100 - index;
+  return {
+    time: new Date(Date.UTC(2026, 0, 1, 10, index * 5)).toISOString(),
+    symbol: "XAU/USD",
+    assetClass: "gold",
+    venue: "capital-demo",
+    open: close + 0.5,
     high: close + 2,
     low: close - 2,
     close,

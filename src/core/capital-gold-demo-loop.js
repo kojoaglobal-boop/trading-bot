@@ -37,6 +37,12 @@ export async function runCapitalGoldDemoLoop({
   maxEntryDriftBps = defaultConfig.goldDemo.maxEntryDriftBps,
   allowTrendProbe = defaultConfig.goldDemo.allowTrendProbe,
   trendProbeMinBars = defaultConfig.goldDemo.trendProbeMinBars,
+  manageProfitTargets = defaultConfig.goldDemo.manageProfitTargets,
+  minProfitToExtendDollars = defaultConfig.goldDemo.minProfitToExtendDollars,
+  profitTargetExtensionAtrMultiple = defaultConfig.goldDemo.profitTargetExtensionAtrMultiple,
+  minProfitTargetMoveDistance = defaultConfig.goldDemo.minProfitTargetMoveDistance,
+  moveStopOnTargetExtension = defaultConfig.goldDemo.moveStopOnTargetExtension,
+  breakevenBufferDistance = defaultConfig.goldDemo.breakevenBufferDistance,
   stateFile = DEFAULT_STATE_FILE,
   state,
   writeState = stateFile !== false
@@ -88,6 +94,18 @@ export async function runCapitalGoldDemoLoop({
     ...DEFAULT_PULLBACK_OPTIONS,
     ...strategyOptions
   };
+  const profitTargetAdjustments = manageProfitTargets
+    ? buildProfitTargetAdjustments({
+      bars: primaryTimeframe.bars,
+      openGoldPositions,
+      dailyGuard,
+      minProfitToExtendDollars,
+      profitTargetExtensionAtrMultiple,
+      minProfitTargetMoveDistance,
+      moveStopOnTargetExtension,
+      breakevenBufferDistance
+    })
+    : [];
   const plannedOpenPositions = [...openGoldPositions];
   const timeframeResults = [];
 
@@ -148,6 +166,7 @@ export async function runCapitalGoldDemoLoop({
 
   const submissions = [];
   const confirms = [];
+  const profitTargetUpdates = [];
   if (submitOrders) {
     if (decision.action.startsWith("CLOSE")) {
       const positionsToClose = decision.closePositions || openGoldPositions;
@@ -161,7 +180,22 @@ export async function runCapitalGoldDemoLoop({
           confirms.push(await client.getConfirm(closed.dealReference));
         }
       }
-    } else if (entryDecisions.length) {
+    } else {
+      for (const adjustment of profitTargetAdjustments) {
+        const updated = await client.updatePosition(adjustment.dealId, {
+          profitLevel: adjustment.profitLevel,
+          stopLevel: adjustment.stopLevel
+        });
+        profitTargetUpdates.push({
+          ...adjustment,
+          response: updated
+        });
+        submissions.push(updated);
+        if (updated.dealReference) {
+          confirms.push(await client.getConfirm(updated.dealReference));
+        }
+      }
+
       for (const entryDecision of entryDecisions) {
         const created = await client.createPosition(entryDecision.order);
         submissions.push(created);
@@ -197,6 +231,8 @@ export async function runCapitalGoldDemoLoop({
     decision,
     timeframeResults,
     entryDecisions,
+    profitTargetAdjustments,
+    profitTargetUpdates,
     submissions,
     confirms,
     submitted: submissions[0] || null,
@@ -351,7 +387,15 @@ export function formatCapitalGoldDemoLoop(result) {
     lines.push("");
     lines.push("Open Gold Positions");
     for (const position of result.openGoldPositions) {
-      lines.push(`  ${position.direction || "n/a"} size=${formatNumber(position.size)} level=${formatMaybeMoney(position.level)} upl=${money(position.upl)} deal=${position.dealId || "n/a"}`);
+      lines.push(`  ${position.direction || "n/a"} size=${formatNumber(position.size)} level=${formatMaybeMoney(position.level)} tp=${formatMaybeMoney(position.profitLevel)} upl=${money(position.upl)} deal=${position.dealId || "n/a"}`);
+    }
+  }
+
+  if ((result.profitTargetAdjustments || []).length) {
+    lines.push("");
+    lines.push("Profit Target Adjustments");
+    for (const adjustment of result.profitTargetAdjustments) {
+      lines.push(`  ${adjustment.direction} deal=${adjustment.dealId} tp ${formatMaybeMoney(adjustment.previousProfitLevel)} -> ${formatMaybeMoney(adjustment.profitLevel)} sl ${formatMaybeMoney(adjustment.previousStopLevel)} -> ${formatMaybeMoney(adjustment.stopLevel)} reason=${adjustment.reason}`);
     }
   }
 
@@ -396,6 +440,113 @@ export function formatCapitalGoldDemoLoop(result) {
   }
 
   return lines.join("\n");
+}
+
+export function buildProfitTargetAdjustments({
+  bars,
+  openGoldPositions = [],
+  dailyGuard = activeGuard(),
+  minProfitToExtendDollars = defaultConfig.goldDemo.minProfitToExtendDollars,
+  profitTargetExtensionAtrMultiple = defaultConfig.goldDemo.profitTargetExtensionAtrMultiple,
+  minProfitTargetMoveDistance = defaultConfig.goldDemo.minProfitTargetMoveDistance,
+  moveStopOnTargetExtension = defaultConfig.goldDemo.moveStopOnTargetExtension,
+  breakevenBufferDistance = defaultConfig.goldDemo.breakevenBufferDistance
+} = {}) {
+  if (!bars?.length || dailyGuard.blocksEntries || dailyGuard.closeOpenPositions) {
+    return [];
+  }
+
+  const latestBar = bars.at(-1);
+  const atr = averageTrueRange(bars.slice(-15));
+  const trend = trendConfidence(bars);
+  if (!latestBar || !Number.isFinite(atr) || atr <= 0) {
+    return [];
+  }
+
+  const minProfit = Number(minProfitToExtendDollars || 0);
+  const extension = Math.max(atr * Number(profitTargetExtensionAtrMultiple || 1.5), latestBar.close * 0.0005);
+  const minMove = Number(minProfitTargetMoveDistance || 0);
+  const adjustments = [];
+
+  for (const position of openGoldPositions) {
+    const direction = String(position.direction || "").toUpperCase();
+    const upl = Number(position.upl || 0);
+    if (!position.dealId || upl < minProfit) {
+      continue;
+    }
+
+    if (direction === "BUY" && !trend.bullish) {
+      continue;
+    }
+    if (direction === "SELL" && !trend.bearish) {
+      continue;
+    }
+
+    const currentPrice = direction === "BUY"
+      ? latestBar.bid || latestBar.close
+      : latestBar.ask || latestBar.close;
+    const nextProfitLevel = direction === "BUY"
+      ? roundDistance(currentPrice + extension)
+      : roundDistance(currentPrice - extension);
+    const previousProfitLevel = Number(position.profitLevel || 0);
+
+    if (previousProfitLevel > 0) {
+      const improvesTarget = direction === "BUY"
+        ? nextProfitLevel > previousProfitLevel + minMove
+        : nextProfitLevel < previousProfitLevel - minMove;
+      if (!improvesTarget) {
+        continue;
+      }
+    }
+
+    const stopLevel = moveStopOnTargetExtension
+      ? buildProtectedStopLevel({
+        position,
+        direction,
+        breakevenBufferDistance
+      })
+      : null;
+
+    adjustments.push({
+      dealId: position.dealId,
+      direction,
+      profitLevel: nextProfitLevel,
+      stopLevel,
+      previousStopLevel: position.stopLevel || null,
+      previousProfitLevel: previousProfitLevel || null,
+      reason: `extended TP${stopLevel ? " and protected SL" : ""} while ${direction.toLowerCase()} is profitable (${money(upl)}) and trend remains aligned`
+    });
+  }
+
+  return adjustments;
+}
+
+function buildProtectedStopLevel({
+  position,
+  direction,
+  breakevenBufferDistance
+}) {
+  const entry = Number(position.level || 0);
+  if (!Number.isFinite(entry) || entry <= 0) {
+    return null;
+  }
+
+  const buffer = Math.max(0, Number(breakevenBufferDistance || 0));
+  const currentStop = Number(position.stopLevel || 0);
+  const protectedStop = direction === "BUY"
+    ? roundDistance(entry + buffer)
+    : roundDistance(entry - buffer);
+
+  if (currentStop > 0) {
+    const improvesStop = direction === "BUY"
+      ? protectedStop > currentStop
+      : protectedStop < currentStop;
+    if (!improvesStop) {
+      return null;
+    }
+  }
+
+  return protectedStop;
 }
 
 async function loadGoldTimeframeBars({
@@ -542,6 +693,8 @@ function extractOpenPositions(payload, epic) {
         direction: position.direction,
         size: Number(position.size || 0),
         level: Number(position.level || 0),
+        stopLevel: numberOrNull(position.stopLevel),
+        profitLevel: numberOrNull(position.profitLevel),
         upl: Number(position.upl || 0)
       };
     });
@@ -744,14 +897,11 @@ function buildTrendProbe({
     return null;
   }
 
-  const closes = bars.map((bar) => bar.close);
-  const fast = ema(closes, 9);
-  const pullback = ema(closes, 21);
-  const trend = ema(closes, 50);
+  const confidence = trendConfidence(bars);
   const atr = averageTrueRange(bars.slice(-15));
   const atrPct = latestBar.close > 0 ? atr / latestBar.close : 0;
-  const bullish = fast > pullback && pullback > trend && latestBar.close > previous.close && latestBar.close > fast;
-  const bearish = fast < pullback && pullback < trend && latestBar.close < previous.close && latestBar.close < fast;
+  const bullish = confidence.bullish;
+  const bearish = confidence.bearish;
 
   if (atrPct < 0.00015 || atrPct > 0.008) {
     return null;
@@ -774,6 +924,27 @@ function buildTrendProbe({
     latestBarTime: latestBar.time,
     dedupeKey,
     reason: `aggressive Gold trend-probe ${direction.toLowerCase()} with EMA stack and ATR ${atrPct.toFixed(5)}`
+  };
+}
+
+function trendConfidence(bars) {
+  const latestBar = bars.at(-1);
+  const previous = bars.at(-2);
+  if (bars.length < 30 || !latestBar || !previous) {
+    return {
+      bullish: false,
+      bearish: false
+    };
+  }
+
+  const closes = bars.map((bar) => bar.close);
+  const fast = ema(closes, 9);
+  const pullback = ema(closes, 21);
+  const trend = ema(closes, 50);
+
+  return {
+    bullish: fast > pullback && pullback > trend && latestBar.close > previous.close && latestBar.close > fast,
+    bearish: fast < pullback && pullback < trend && latestBar.close < previous.close && latestBar.close < fast
   };
 }
 
@@ -840,6 +1011,11 @@ function firstFinite(...values) {
     }
   }
   return 0;
+}
+
+function numberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : null;
 }
 
 function roundDistance(value) {

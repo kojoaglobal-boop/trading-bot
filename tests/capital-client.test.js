@@ -70,7 +70,7 @@ test("CapitalClient creates a session and sends CST security headers", async () 
   assert.equal(requests[1].options.headers["Content-Type"], "application/json");
 });
 
-test("CapitalClient can list, create, confirm, and close demo positions", async () => {
+test("CapitalClient can list, create, update, confirm, and close demo positions", async () => {
   const requests = [];
   const client = new CapitalClient({
     env: {
@@ -109,6 +109,10 @@ test("CapitalClient can list, create, confirm, and close demo positions", async 
         return jsonResponse({ dealReference: "ref-1" });
       }
 
+      if (url.pathname === "/api/v1/positions/deal-1" && options.method === "PUT") {
+        return jsonResponse({ dealReference: "update-ref-1" });
+      }
+
       if (url.pathname === "/api/v1/confirms/ref-1") {
         return jsonResponse({
           dealReference: "ref-1",
@@ -137,14 +141,25 @@ test("CapitalClient can list, create, confirm, and close demo positions", async 
     stopDistance: 10,
     profitDistance: 20
   });
+  const updated = await client.updatePosition("deal-1", {
+    stopLevel: 4035,
+    profitLevel: 4070
+  });
   const confirm = await client.getConfirm(created.dealReference);
   const closed = await client.closePosition("deal-1");
 
   assert.equal(positions.positions.length, 1);
   assert.equal(created.dealReference, "ref-1");
+  assert.equal(updated.dealReference, "update-ref-1");
   assert.equal(confirm.dealStatus, "ACCEPTED");
   assert.equal(closed.dealReference, "close-ref-1");
-  assert.equal(JSON.parse(requests[2].options.body).profitDistance, 20);
+  const createRequest = requests.find((request) => request.options.method === "POST" && request.url.pathname === "/api/v1/positions");
+  const updateRequest = requests.find((request) => request.options.method === "PUT" && request.url.pathname === "/api/v1/positions/deal-1");
+  assert.equal(JSON.parse(createRequest.options.body).profitDistance, 20);
+  assert.deepEqual(JSON.parse(updateRequest.options.body), {
+    stopLevel: 4035,
+    profitLevel: 4070
+  });
   assert.match(formatCapitalPositions(positions), /GOLD/);
   assert.match(formatCapitalDealResult(confirm), /ACCEPTED/);
 });

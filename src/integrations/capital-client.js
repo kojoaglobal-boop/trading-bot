@@ -167,6 +167,36 @@ export class CapitalClient {
     });
   }
 
+  async updatePosition(dealId, {
+    guaranteedStop,
+    trailingStop,
+    stopLevel,
+    stopDistance,
+    stopAmount,
+    profitLevel,
+    profitDistance,
+    profitAmount
+  } = {}) {
+    if (!dealId) {
+      throw new Error("Capital.com dealId is required.");
+    }
+
+    return this.requestJson({
+      method: "PUT",
+      path: `/api/v1/positions/${encodeURIComponent(dealId)}`,
+      body: compactObject({
+        guaranteedStop,
+        trailingStop,
+        stopLevel,
+        stopDistance,
+        stopAmount,
+        profitLevel,
+        profitDistance,
+        profitAmount
+      })
+    });
+  }
+
   async closePosition(dealId) {
     if (!dealId) {
       throw new Error("Capital.com dealId is required.");

@@ -234,7 +234,13 @@ export const defaultConfig = {
     maxSignalAgeBars: 6,
     maxEntryDriftBps: 30,
     allowTrendProbe: true,
-    trendProbeMinBars: 30
+    trendProbeMinBars: 30,
+    manageProfitTargets: true,
+    minProfitToExtendDollars: 1,
+    profitTargetExtensionAtrMultiple: 1.5,
+    minProfitTargetMoveDistance: 1,
+    moveStopOnTargetExtension: true,
+    breakevenBufferDistance: 0.5
   },
   risk: {
     allowedAssetClasses: ["meme", "stock", "gold", "future", "forex"],
